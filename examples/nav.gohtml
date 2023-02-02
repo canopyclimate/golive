@@ -1,0 +1,10 @@
+<div>
+  Go to Counter: {{ liveNav "navigate" "/counter" (dict "" "") "Counter" }}
+  <h1>Nav</h1>
+  {{ liveNav "patch" "/nav" (dict "item" 1) "Item 1" }}
+  {{ liveNav "patch" "/nav" (dict "item" 2) "Item 2" }}
+  {{ liveNav "patch" "/nav" (dict "item" 3) "Item 3" }}
+  <div>Item: {{ .Item }}</div>
+
+  {{ someTag }}
+</div>
