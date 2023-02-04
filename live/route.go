@@ -6,65 +6,64 @@ import (
 	"reflect"
 )
 
-type JoinHandler struct {
-	lv   View
+// joinHandler wraps an http.ResponseWriter and swallows all HTTP activity—
+// except for WriteHeader, which it steals the status code from but does not pass through.
+// This is to prevent the live.Config.Mux routing from poisoning non-LiveView requests
+// by writing, for examples, 404s to routes that very much exist elsewhere in the routing tree.
+type joinHandler struct {
+	w    http.ResponseWriter
 	code int
 }
 
-func (x *JoinHandler) SetView(lv View) {
-	x.lv = lv
-}
-
-func (x *JoinHandler) View() View {
-	return x.lv
-}
-
-// Header returns an empty http.Header.
-// Modifications to the returned header are ignored.
-func (*JoinHandler) Header() http.Header {
-	// TODO: record these for some reason?
+func (x *joinHandler) Header() http.Header {
 	return make(http.Header)
 }
 
-// Write always returns an error.
-func (*JoinHandler) Write(b []byte) (int, error) {
-	// TODO: buffer instead?
-	return 0, fmt.Errorf("live.JoinHandler rejects all writes: %s", b)
+func (x *joinHandler) Write(b []byte) (int, error) {
+	return 0, fmt.Errorf("joinHandler.Write does not accept writes")
 }
 
-// WriteHeader notes a status code.
-func (x *JoinHandler) WriteHeader(statusCode int) {
-	x.code = statusCode
+func (x *joinHandler) WriteHeader(statusCode int) {
+	if x.code == 0 {
+		x.code = statusCode
+	}
 }
 
-func SetView(rw http.ResponseWriter, v View) {
-	j, ok := rw.(*JoinHandler)
+// SetView marks r as corresponding to v.
+// Its handler will result in a rendered LiveView.
+func SetView(r *http.Request, v View) {
+	container, ok := r.Context().Value(liveViewRequestContextKey{}).(*liveViewContainer)
 	if !ok {
 		return
 	}
-	j.SetView(v)
+	container.lv = v
 }
 
-func PatchView[T View](rw http.ResponseWriter) T {
+// GetView returns the View of type T corresponding to r.
+// If no such view has been set, returns the zero value for T.
+func GetView[T View](r *http.Request) T {
 	var zero T
-	j, ok := rw.(*JoinHandler)
+	container, ok := r.Context().Value(liveViewRequestContextKey{}).(*liveViewContainer)
 	if !ok {
 		return zero
 	}
-	t, ok := j.lv.(T)
+	t, ok := container.lv.(T)
 	if !ok {
 		return zero
 	}
 	return t
 }
 
-func MakeView[T View](rw http.ResponseWriter) T {
+// MakeView will either get the existing View of type T associated with r
+// or create a View of type T.
+// If r is not a LiveView-enabled request, returns the zero value of T.
+func MakeView[T View](r *http.Request) T {
 	var zero T
-	j, ok := rw.(*JoinHandler)
+	container, ok := r.Context().Value(liveViewRequestContextKey{}).(*liveViewContainer)
 	if !ok {
 		return zero
 	}
-	t, ok := j.lv.(T)
+	t, ok := container.lv.(T)
 	if !ok {
 		typ := reflect.TypeOf(zero)
 		if typ.Kind() != reflect.Pointer {

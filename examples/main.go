@@ -22,40 +22,37 @@ import (
 )
 
 func main() {
-	livemux := mux.NewRouter()
+	r := mux.NewRouter()
+
+	// livemux := r.NewRoute().Subrouter()
 	// set up liveview handlers, in a variety of styles to illustrate options
-	livemux.HandleFunc("/counter", func(w http.ResponseWriter, r *http.Request) {
-		// Manual type-checking
-		if j, ok := w.(*live.JoinHandler); ok {
-			j.SetView(new(Counter))
-		}
+	r.HandleFunc("/counter", func(w http.ResponseWriter, r *http.Request) {
+		live.SetView(r, new(Counter))
 	})
-	livemux.HandleFunc("/counter/{i}", func(w http.ResponseWriter, r *http.Request) {
+	r.HandleFunc("/counter/{i}", func(w http.ResponseWriter, r *http.Request) {
 		// Using a url component, with a helper
 		x := try.E1(strconv.Atoi(mux.Vars(r)["i"]))
-		c := live.MakeView[*Counter](w)
+		c := live.MakeView[*Counter](r)
 		c.Count = x
-		live.SetView(w, c)
+		live.SetView(r, c)
 	})
-	livemux.HandleFunc("/nav", func(w http.ResponseWriter, r *http.Request) {
-		live.SetView(w, new(Nav))
+	r.HandleFunc("/nav", func(w http.ResponseWriter, r *http.Request) {
+		live.SetView(r, new(Nav))
 	})
-	livemux.HandleFunc("/more", func(w http.ResponseWriter, r *http.Request) {
-		live.SetView(w, new(MoreEvents))
+	r.HandleFunc("/more", func(w http.ResponseWriter, r *http.Request) {
+		live.SetView(r, new(MoreEvents))
 	})
-	livemux.HandleFunc("/photos", func(w http.ResponseWriter, r *http.Request) {
-		live.SetView(w, new(MyPhotos))
+	r.HandleFunc("/photos", func(w http.ResponseWriter, r *http.Request) {
+		live.SetView(r, new(MyPhotos))
 	})
 
 	liveConfig := live.Config{
-		Mux:            livemux,
+		Mux:            r,
 		LayoutTemplate: loadTemplate("./examples/layout.gohtml", myFuncs),
 		PageTitleConfig: live.PageTitleConfig{
 			Prefix: "GoLive - ",
 		},
 	}
-
-	r := mux.NewRouter()
 	// setup static route
 	publicFS := http.FileServer(http.Dir("./public"))
 	static := r.NewRoute().Subrouter()
@@ -65,8 +62,8 @@ func main() {
 	// setup websocket route
 	r.Handle("/live/websocket", live.NewWebsocketHandler(liveConfig))
 
-	// setup http route
-	r.PathPrefix("/").Handler(live.NewHTTPHandler(liveConfig))
+	// use GoLive Middleware to make our LiveView mounts "live" and able to accept views
+	r.Use(liveConfig.Middleware)
 
 	// register mux router
 	http.Handle("/", r)
