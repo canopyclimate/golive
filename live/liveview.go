@@ -30,6 +30,9 @@ type Config struct {
 	// PageTitleConfig is a configuration for the page title if the application
 	// uses the liveTitleTag template function in its LayoutTemplate.
 	PageTitleConfig PageTitleConfig
+	// MakeCSRFToken, if non-nil, will be called when a View is requested and should return a valid CSRF token.
+	// If nil, a UUID will be used instead.
+	MakeCSRFToken func(*http.Request) string
 }
 
 type liveViewRequestContextKey struct{}
@@ -113,7 +116,12 @@ func (c *Config) Middleware(next http.Handler) http.Handler {
 			}
 		}
 
-		csrf := uuid.New().String() // TODO Use gorilla/csrf?
+		var csrf string
+		if c.MakeCSRFToken != nil {
+			csrf = c.MakeCSRFToken(r)
+		} else {
+			csrf = uuid.New().String()
+		}
 		meta := Meta{
 			Uploads:   uploadConfigs,
 			CSRFToken: csrf,
