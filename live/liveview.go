@@ -32,13 +32,110 @@ type Config struct {
 	PageTitleConfig PageTitleConfig
 }
 
-func (c *Config) viewForRequest(r *http.Request, currentView View) (View, error) {
-	rw := &JoinHandler{
+type liveViewRequestContextKey struct{}
+type liveViewContainer struct {
+	lv View
+}
+
+func (c *Config) viewForRequest(w http.ResponseWriter, r *http.Request, currentView View) (View, int) {
+	container := &liveViewContainer{
 		lv: currentView,
 	}
+	r = r.WithContext(context.WithValue(r.Context(), liveViewRequestContextKey{}, container))
+
+	rw := &joinHandler{
+		w: w,
+	}
 	c.Mux.ServeHTTP(rw, r)
-	// TODO: check rw.code, convert some status codes (500s?) into meaningful errors
-	return rw.lv, nil
+	return container.lv, rw.code
+}
+
+func (c *Config) Middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Check for cases where our config's router is its own Mux.
+		// In that case we will re-enter the middleware and should no-op.
+		_, ok := w.(*joinHandler)
+		if ok {
+			next.ServeHTTP(w, r)
+			return
+		}
+		// Get the LiveView if one is routable.
+		lv, code := c.viewForRequest(w, r, nil)
+
+		// If the inner router 500s, cease the middleware chain.
+		if code%100 == 5 {
+			return
+		}
+
+		// If no view was found continue the chain without upgrading the request to a live one;
+		// the outer router will presumably serve this route, but we no longer care about it.
+		if lv == nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// At this point we know this is a "live" route.
+		// Configure things with our view and call the appropriate lifecycle methods.
+
+		// if View implements HasPageTitleConfig interface then
+		// use the config to set the page title
+		ptc := c.PageTitleConfig
+		if p, ok := lv.(PageTitleConfigurer); ok {
+			ptc = p.PageTitleConfig()
+		}
+
+		// Run initial Lifecycle Mount => HandleParams => Render
+		// We never call HandleEvent or HandleInfo for HTTP requests
+		ctx := r.Context()
+		// add a faux socket for uploadConfigs
+		uploadConfigs := make(map[string]*UploadConfig)
+		ctx = withSocket(ctx, &socket{
+			uploadConfigs: uploadConfigs,
+		})
+
+		// if View implements Mounter interface then call Mount
+		m, ok := lv.(Mounter)
+		if ok {
+			err := m.Mount(ctx, Params{})
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+
+		// if View implements ParamsHandler interface then call HandleParams
+		hp, ok := lv.(ParamsHandler)
+		if ok {
+			err := hp.HandleParams(ctx, r.URL)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+
+		csrf := uuid.New().String() // TODO Use gorilla/csrf?
+		meta := Meta{
+			Uploads:   uploadConfigs,
+			CSRFToken: csrf,
+		}
+
+		t := lv.Render(ctx, meta)
+
+		dot := LiveViewDot{
+			LiveViewID:   uuid.New().String(), // TODO use nanoID or something shorter?
+			CSRFToken:    csrf,
+			View:         lv,
+			PageTitle:    ptc,
+			ViewTemplate: t,
+			Meta:         meta,
+		}
+
+		err := c.LayoutTemplate.Execute(w, dot)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	})
 }
 
 // Meta is the metadata passed to a View's Render method as well as added to
@@ -108,6 +205,14 @@ type WebsocketHandler struct {
 }
 
 func (x *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Potentially unwrap the joinHandler.
+	// This can happen if the user is using the same router for live.Config.Mux
+	// and for routing to the WebsocketHandler.
+	j, ok := w.(*joinHandler)
+	if ok {
+		w = j.w
+	}
+
 	// TODO: route maps
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -244,9 +349,10 @@ func (s *socket) dispatch(ctx context.Context, msg *phx.Msg) ([]byte, error) {
 			// headers or the like(?)
 			r := s.req.Clone(s.req.Context()) // todo: background context?
 			r.URL = url
-			s.view, err = s.config.viewForRequest(r, nil)
-			if err != nil {
-				return nil, fmt.Errorf("could not find view for url: %v", err)
+			var code int
+			s.view, code = s.config.viewForRequest(nil, r, nil)
+			if code%100 == 5 {
+				return nil, fmt.Errorf("Error finding view for url: %v", err)
 			}
 			if s.view == nil {
 				// TODO: something better here!
@@ -393,10 +499,10 @@ func (s *socket) dispatch(ctx context.Context, msg *phx.Msg) ([]byte, error) {
 		return phx.NewReplyDiff(*msg, diff).JSON()
 	case "live_patch":
 		r := s.req.Clone(s.req.Context()) // todo: background context?
-		v, err := s.config.viewForRequest(r, s.view)
+		v, code := s.config.viewForRequest(nil, r, s.view)
 		s.view = v // update the view
-		if err != nil {
-			return nil, err
+		if code%100 == 5 {
+			return nil, fmt.Errorf("Status code 500 patching LiveView in %v", r.URL)
 		}
 		url, err := url.Parse(msg.Payload["url"].(string))
 		if err != nil {
@@ -653,81 +759,6 @@ func NewHTTPHandler(c Config) *HTTPHandler {
 // HTTPHandler handles HTTP requests for a View
 type HTTPHandler struct {
 	config Config
-}
-
-// ServeHTTP handles HTTP requests for a View
-// It looks up the View by the request data and runs the initial Lifecycle
-// Mount => HandleParams => Render
-// It then renders the View into the LayoutTemplate
-func (x *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	lv, err := x.config.viewForRequest(r, nil)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if lv == nil {
-		http.Error(w, "not found", http.StatusNotFound)
-		return
-	}
-
-	// if View implements HasPageTitleConfig interface then
-	// use the config to set the page title
-	ptc := x.config.PageTitleConfig
-	if p, ok := lv.(PageTitleConfigurer); ok {
-		ptc = p.PageTitleConfig()
-	}
-
-	// Run initial Lifecycle Mount => HandleParams => Render
-	// We never call HandleEvent or HandleInfo for HTTP requests
-	ctx := r.Context()
-	// add a faux socket for uploadConfigs
-	uploadConfigs := make(map[string]*UploadConfig)
-	ctx = withSocket(ctx, &socket{
-		uploadConfigs: uploadConfigs,
-	})
-
-	// if View implements Mounter interface then call Mount
-	m, ok := lv.(Mounter)
-	if ok {
-		err := m.Mount(ctx, Params{})
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
-
-	// if View implements ParamsHandler interface then call HandleParams
-	hp, ok := lv.(ParamsHandler)
-	if ok {
-		err := hp.HandleParams(ctx, r.URL)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
-
-	csrf := uuid.New().String() // TODO Use gorilla/csrf?
-	meta := Meta{
-		Uploads:   uploadConfigs,
-		CSRFToken: csrf,
-	}
-
-	t := lv.Render(ctx, meta)
-
-	dot := LiveViewDot{
-		LiveViewID:   uuid.New().String(), // TODO use nanoID or something shorter?
-		CSRFToken:    csrf,
-		View:         lv,
-		PageTitle:    ptc,
-		ViewTemplate: t,
-		Meta:         meta,
-	}
-
-	err = x.config.LayoutTemplate.Execute(w, dot)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 }
 
 // SendInfo sends an internal event to the View if it is connected to a WebSocket

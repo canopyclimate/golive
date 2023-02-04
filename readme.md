@@ -65,60 +65,87 @@ go run ./examples/main.go
 
 ## Installing
 
+On your server:
+
 ```
 go get github.com/canopyclimate/golive@latest
+```
+
+In your frontend:
+
+```
+npm i --save phoenix
+npm i --save phoenx_live_view
+```
+
+And then add the following to whatever JavaScript you’ll be loading in your frontend (you probably want to load this file in your `live.Config.LayoutTemplate` html):
+
+```js
+import { Socket } from "phoenix";
+import { LiveSocket } from "phoenix_live_view";
+
+let csrfToken = document.querySelector("meta[name='csrf-token']")?.getAttribute("content")
+// "/live" below should be whatever path you set up for your websocket.
+let liveSocket = new LiveSocket("/live", Socket, {params: {_csrf_token: csrfToken}})
+
+// connect if there are any LiveViews on the page
+liveSocket.connect()
 ```
 
 ## About `htmltmpl`
 
 This package includes a fork of the standard library’s `html/template` package named `htmltmpl`. It has similar security guarantees to the original package. The fork exists to support the diffing needed to track changes in your HTML based on the live view’s state.
 
-## Routing
+## Routing & Config
 
-As noted above, GoLive does not endeavor to own your app’s routing. Instead, we provide a few different ways to connect a given route in your app to a live view.
+As noted above, GoLive does not endeavor to own your app’s routing. Instead, we provide a `net/http` middleware which you then use—any compatible routing library will do.
 
-First, you always need to route the path your live views will use to mount themselves via websockets. You can do this by creating a `live.Config` and passing it into `live.NewWebsocketHandler`, giving you an `http.Handler` you can use as you see fit:
-
-```
-r.Handle("/live/websocket", live.NewWebsocketHandler(liveConfig))
-```
-
-Also in this `live.Config` is a `Mux` property that accepts any `http.Handler` that can mux to your live views. Actually creating the view in your handlers can happen in a few different ways. Each of the options below assume you’re in the context of some handler that has an `http.ResponseWriter` named `w`:
-
-First, you can explicitly cast your response writer to one that understands live views and, if successful, return the view:
+In order to route to your LiveViews you will need to create a `live.Config`. This struct has a `Mux` field, an `http.Handler` that maps routes to the handlers that will create your LiveViews (more on those in a bit). Typically, this `Mux` will be a subrouter within your app; if an incoming request maps to a “live” route it will be through `Mux`, and if `Mux` 404s or otherwise does not handle a request it will fall through to the rest of your app. Here’s what that looks like in practice:
 
 ```go
-if j, ok := w.(*live.JoinHandler); ok {
-    j.SetView(new(Counter))
+// Using gorilla/mux as an example, but this can be any compatible router.
+r := mux.NewRouter()
+
+// Some funcmap you’d like to use in your root layout.
+// Remember to merge in live.Funcs() and changeset.Funcs()
+// if you’re interested in using them.
+var funcs template.FuncMap
+tmpl := htmltmpl.New("layout.gohtml").Funcs(funcs)
+t := htmltmpl.Must(tmpl.ParseFiles("path/to/layout.gohtml"))
+
+liveConfig := live.Config{
+    // Note that you may use a different router as your live.Config.Mux if you wish.
+    Mux:            r,
+    LayoutTemplate: t,
+    PageTitleConfig: live.PageTitleConfig{
+        Prefix: "GoLive - ",
+    },
 }
-```
 
-You may also use this more succinct syntax. If `w` is not a GoLive muxer writer, it is a no-op:
+// Configure incoming requests to allow upgrading to LiveView.
+r.Use(liveConfig.Middleware)
 
-```go
-live.SetView(w, new(Counter))
-```
+// Handle websocket connections from mounted LiveViews.
+r.Handle("/live/websocket", live.NewWebsocketHandler(liveConfig))
 
-This flexibility has some tradeoffs. In addition to letting you bring your own muxer, it also allows opting into patterns in which the URL path contains variables that can then mutate the existing view. Note, however, that those familiar with Phoenix’s LiveView may be surprised at how path variables are parsed at the _routing_ layer rather than internally as part of `HandleParams`. Here’s an example using [gorilla/mux](https://github.com/gorilla/mux):
-
-Let’s imagine a route that could start our `Counter` at a number in the route, like `/counter/12`:
-
-```go
-livemux := mux.NewRouter()
-livemux.HandleFunc("/counter/{i}", func(w http.ResponseWriter, r *http.Request) {
-    x := try.E1(strconv.Atoi(mux.Vars(r)["i"]))
-    c := live.MakeView[*Counter](w) // Note this line.
-    c.Count = x
-    live.SetView(w, c)
+// Route to a LiveView, for example.
+r.HandleFunc("/dashboard", func(w http.ResponseWriter, r *http.Request) {
+    live.SetView(r, new(Dashboard))
 })
-```
 
-Note the annotated line: the `live.MakeView` helper will return the existing live view for this session if it already exists, and otherwise create it. We then set the count value.
+// Route to a LiveView that can be patched via path variables.
+r.HandleFunc("/user/{user_id}", func(w http.ResponseWriter, r *http.Request) {
+    x := try.E1(strconv.Atoi(mux.Vars(r)["user_id"]))
+    p := live.MakeView[*UserProfile](r)
+    p.UserID = x
+    live.SetView(r, p)
+})
+
+// More routes could follow. Non-LiveView routes will work as expected.
+```
 
 > **Note**  
 > When you patch a view in GoLive, we first give you an opportunity to re-handle the “request,” parsing it as needed, before calling `HandleParams`. In Phoenix terms, path params are handled different from URL query params: path params are parsed out at the muxer layer, URL query params in the more traditional `HandleParams` callback. This is a consequence of our decision to let you bring your own muxer, but may be unexpected for those familiar with Phoenix.
-
-Once you’ve set up your muxer as desired, remember to set it as the `Mux` property on `live.Config`.
 
 ## License
 
