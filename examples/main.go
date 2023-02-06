@@ -47,10 +47,13 @@ func main() {
 	})
 
 	liveConfig := live.Config{
-		Mux:            r,
-		LayoutTemplate: loadTemplate("./examples/layout.gohtml", myFuncs),
-		PageTitleConfig: live.PageTitleConfig{
-			Prefix: "GoLive - ",
+		Mux: r,
+		WriteLayout: func(w http.ResponseWriter, r *http.Request, lvd *live.LiveViewDot) error {
+			lvd.PageTitle.Prefix = "GoLive - "
+			t := loadTemplate("./examples/layout.gohtml", myFuncs)
+			dot := make(map[string]any)
+			dot["LiveView"] = lvd
+			return t.Execute(w, dot)
 		},
 	}
 	// setup static route
