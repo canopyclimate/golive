@@ -23,24 +23,21 @@ import (
 
 // Config is the configuration for a live application.
 type Config struct {
-	// LayoutTemplate is a template that wraps all Views
-	LayoutTemplate *htmltmpl.Template
-	// Mux is a http.Handler that routes requests to Views
+	// Mux is a http.Handler that routes requests to Views.
 	Mux http.Handler
-	// PageTitleConfig is a configuration for the page title if the application
-	// uses the liveTitleTag template function in its LayoutTemplate.
-	PageTitleConfig PageTitleConfig
-	// MakeCSRFToken, if non-nil, will be called when a View is requested and should return a valid CSRF token.
-	// If nil, a UUID will be used instead.
-	MakeCSRFToken func(*http.Request) string
+	// WriteLayout is a func that writes your base layout HTML to a response writer for a given request and dot.
+	// You are responsible for carrying the contents of the LiveViewDot through to your layout template.
+	// If your layout template uses the {{ liveViewContainerTag }} func, it should be passed the contents of LiveViewDot as its argument.
+	WriteLayout func(http.ResponseWriter, *http.Request, *LiveViewDot) error
 }
 
 type liveViewRequestContextKey struct{}
 type liveViewContainer struct {
 	lv View
+	r  *http.Request
 }
 
-func (c *Config) viewForRequest(w http.ResponseWriter, r *http.Request, currentView View) (View, int) {
+func (c *Config) viewForRequest(w http.ResponseWriter, r *http.Request, currentView View) (View, int, *http.Request) {
 	container := &liveViewContainer{
 		lv: currentView,
 	}
@@ -50,7 +47,10 @@ func (c *Config) viewForRequest(w http.ResponseWriter, r *http.Request, currentV
 		w: w,
 	}
 	c.Mux.ServeHTTP(rw, r)
-	return container.lv, rw.code
+	if container.r != nil {
+		r = container.r
+	}
+	return container.lv, rw.code, r
 }
 
 func (c *Config) Middleware(next http.Handler) http.Handler {
@@ -63,7 +63,7 @@ func (c *Config) Middleware(next http.Handler) http.Handler {
 			return
 		}
 		// Get the LiveView if one is routable.
-		lv, code := c.viewForRequest(w, r, nil)
+		lv, code, r := c.viewForRequest(w, r, nil)
 
 		// If the inner router 500s, cease the middleware chain.
 		if code%100 == 5 {
@@ -82,7 +82,7 @@ func (c *Config) Middleware(next http.Handler) http.Handler {
 
 		// if View implements HasPageTitleConfig interface then
 		// use the config to set the page title
-		ptc := c.PageTitleConfig
+		var ptc PageTitleConfig
 		if p, ok := lv.(PageTitleConfigurer); ok {
 			ptc = p.PageTitleConfig()
 		}
@@ -116,12 +116,8 @@ func (c *Config) Middleware(next http.Handler) http.Handler {
 			}
 		}
 
-		var csrf string
-		if c.MakeCSRFToken != nil {
-			csrf = c.MakeCSRFToken(r)
-		} else {
-			csrf = uuid.New().String()
-		}
+		// Users may overwrite this in WriteLayout if they wish.
+		csrf := uuid.New().String()
 		meta := Meta{
 			Uploads:   uploadConfigs,
 			CSRFToken: csrf,
@@ -129,7 +125,7 @@ func (c *Config) Middleware(next http.Handler) http.Handler {
 
 		t := lv.Render(ctx, meta)
 
-		dot := LiveViewDot{
+		dot := &LiveViewDot{
 			LiveViewID:   uuid.New().String(), // TODO use nanoID or something shorter?
 			CSRFToken:    csrf,
 			View:         lv,
@@ -138,7 +134,8 @@ func (c *Config) Middleware(next http.Handler) http.Handler {
 			Meta:         meta,
 		}
 
-		err := c.LayoutTemplate.Execute(w, dot)
+		// TODO: Fallback to a hardcoded base layout if WriteLayout isn't set.
+		err := c.WriteLayout(w, r, dot)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -358,9 +355,9 @@ func (s *socket) dispatch(ctx context.Context, msg *phx.Msg) ([]byte, error) {
 			r := s.req.Clone(s.req.Context()) // todo: background context?
 			r.URL = url
 			var code int
-			s.view, code = s.config.viewForRequest(nil, r, nil)
+			s.view, code, _ = s.config.viewForRequest(nil, r, nil)
 			if code%100 == 5 {
-				return nil, fmt.Errorf("Error finding view for url: %v", err)
+				return nil, fmt.Errorf("error finding view for url: %v", err)
 			}
 			if s.view == nil {
 				// TODO: something better here!
@@ -507,10 +504,10 @@ func (s *socket) dispatch(ctx context.Context, msg *phx.Msg) ([]byte, error) {
 		return phx.NewReplyDiff(*msg, diff).JSON()
 	case "live_patch":
 		r := s.req.Clone(s.req.Context()) // todo: background context?
-		v, code := s.config.viewForRequest(nil, r, s.view)
+		v, code, _ := s.config.viewForRequest(nil, r, s.view)
 		s.view = v // update the view
 		if code%100 == 5 {
-			return nil, fmt.Errorf("Status code 500 patching LiveView in %v", r.URL)
+			return nil, fmt.Errorf("status code 500 patching LiveView in %v", r.URL)
 		}
 		url, err := url.Parse(msg.Payload["url"].(string))
 		if err != nil {

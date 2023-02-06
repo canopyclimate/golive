@@ -84,7 +84,7 @@ func Navigation(linkType, path string, params map[string]any, text string) (html
 }
 
 // LiveView renders a container for a live.View - required for layoutTemplates.
-func LiveViewTag(lvd LiveViewDot) (htmltmpl.HTML, error) {
+func LiveViewTag(lvd *LiveViewDot) (htmltmpl.HTML, error) {
 	var buf strings.Builder
 	buf.WriteString(fmt.Sprintf(`
 		<div

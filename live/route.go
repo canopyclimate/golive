@@ -37,6 +37,7 @@ func SetView(r *http.Request, v View) {
 		return
 	}
 	container.lv = v
+	container.r = r
 }
 
 // GetView returns the View of type T corresponding to r.
