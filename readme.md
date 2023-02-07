@@ -112,6 +112,8 @@ In order to route to your LiveViews you will need to create a `live.Config`. Thi
 // Using gorilla/mux as an example, but this can be any compatible router.
 r := mux.NewRouter()
 
+liveRouter := mux.NewRoute().Subrouter()
+
 // Some funcmap you’d like to use in your root layout.
 // Remember to merge in live.Funcs() and changeset.Funcs()
 // if you’re interested in using them.
@@ -120,8 +122,7 @@ tmpl := htmltmpl.New("layout.gohtml").Funcs(funcs)
 t := htmltmpl.Must(tmpl.ParseFiles("path/to/layout.gohtml"))
 
 liveConfig := live.Config{
-    // Note that you may use a different router as your live.Config.Mux if you wish.
-    Mux:         r,
+    Mux:         liveRouter,
     // This hook lets us inject whatever data/HTML we might need to our live views.
     WriteLayout: func(w http.ResponseWriter, r *http.Request, lvd *live.LayoutDot) error {
         lvd.PageTitle.Prefix = "GoLive - "
@@ -132,18 +133,19 @@ liveConfig := live.Config{
 }
 
 // Configure incoming requests to allow upgrading to LiveView.
+// Note that you cannot use the middleware on the same router as your live.Config.Mux.
 r.Use(liveConfig.Middleware)
 
 // Handle WebSocket connections from mounted LiveViews.
 r.Handle("/live/websocket", live.NewWebsocketHandler(liveConfig))
 
 // Route to a LiveView, for example.
-r.HandleFunc("/dashboard", func(w http.ResponseWriter, r *http.Request) {
+liveRouter.HandleFunc("/dashboard", func(w http.ResponseWriter, r *http.Request) {
     live.SetView(r, new(Dashboard))
 })
 
 // Route to a LiveView that can be patched via path variables.
-r.HandleFunc("/user/{user_id}", func(w http.ResponseWriter, r *http.Request) {
+liveRouter.HandleFunc("/user/{user_id}", func(w http.ResponseWriter, r *http.Request) {
     x := try.E1(strconv.Atoi(mux.Vars(r)["user_id"]))
     p := live.MakeView[*UserProfile](r)
     p.UserID = x
