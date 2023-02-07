@@ -54,13 +54,6 @@ func (c *Config) viewForRequest(w http.ResponseWriter, r *http.Request, currentV
 
 func (c *Config) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Check for cases where our config's router is its own Mux.
-		// In that case we will re-enter the middleware and should no-op.
-		_, ok := w.(*joinHandler)
-		if ok {
-			next.ServeHTTP(w, r)
-			return
-		}
 		// Get the LiveView if one is routable.
 		lv, code, r := c.viewForRequest(w, r, nil)
 
@@ -209,14 +202,6 @@ type WebsocketHandler struct {
 }
 
 func (x *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Potentially unwrap the joinHandler.
-	// This can happen if the user is using the same router for live.Config.Mux
-	// and for routing to the WebsocketHandler.
-	j, ok := w.(*joinHandler)
-	if ok {
-		w = j.w
-	}
-
 	// TODO: route maps
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {

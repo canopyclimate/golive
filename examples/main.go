@@ -24,33 +24,35 @@ import (
 func main() {
 	r := mux.NewRouter()
 
+	lr := r.NewRoute().Subrouter()
+
 	// livemux := r.NewRoute().Subrouter()
 	// set up liveview handlers, in a variety of styles to illustrate options
-	r.HandleFunc("/counter", func(w http.ResponseWriter, r *http.Request) {
+	lr.HandleFunc("/counter", func(w http.ResponseWriter, r *http.Request) {
 		live.SetView(r, new(Counter))
 	})
-	r.HandleFunc("/counter/{i}", func(w http.ResponseWriter, r *http.Request) {
+	lr.HandleFunc("/counter/{i}", func(w http.ResponseWriter, r *http.Request) {
 		// Using a url component, with a helper
 		x := try.E1(strconv.Atoi(mux.Vars(r)["i"]))
 		c := live.MakeView[*Counter](r)
 		c.Count = x
 		live.SetView(r, c)
 	})
-	r.HandleFunc("/nav", func(w http.ResponseWriter, r *http.Request) {
+	lr.HandleFunc("/nav", func(w http.ResponseWriter, r *http.Request) {
 		live.SetView(r, new(Nav))
 	})
-	r.HandleFunc("/more", func(w http.ResponseWriter, r *http.Request) {
+	lr.HandleFunc("/more", func(w http.ResponseWriter, r *http.Request) {
 		live.SetView(r, new(MoreEvents))
 	})
-	r.HandleFunc("/photos", func(w http.ResponseWriter, r *http.Request) {
+	lr.HandleFunc("/photos", func(w http.ResponseWriter, r *http.Request) {
 		live.SetView(r, new(MyPhotos))
 	})
-	r.HandleFunc("/modal", func(w http.ResponseWriter, r *http.Request) {
+	lr.HandleFunc("/modal", func(w http.ResponseWriter, r *http.Request) {
 		live.SetView(r, new(ModalDemo))
 	})
 
 	liveConfig := live.Config{
-		Mux: r,
+		Mux: lr,
 		WriteLayout: func(w http.ResponseWriter, r *http.Request, lvd *live.LayoutDot) error {
 			lvd.PageTitle.Prefix = "GoLive - "
 			t := loadTemplate("./examples/layout.gohtml", myFuncs)
