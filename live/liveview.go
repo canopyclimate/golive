@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 
 	"github.com/canopyclimate/golive/htmltmpl"
@@ -26,9 +25,9 @@ type Config struct {
 	// Mux is a http.Handler that routes requests to Views.
 	Mux http.Handler
 	// WriteLayout is a func that writes your base layout HTML to a response writer for a given request and dot.
-	// You are responsible for carrying the contents of the LiveViewDot through to your layout template.
-	// If your layout template uses the {{ liveViewContainerTag }} func, it should be passed the contents of LiveViewDot as its argument.
-	WriteLayout func(http.ResponseWriter, *http.Request, *LiveViewDot) error
+	// You are responsible for carrying the contents of the LayoutDot through to your layout template.
+	// If your layout template uses the {{ liveViewContainerTag }} func, it should be passed the contents of LayoutDot as its argument.
+	WriteLayout func(http.ResponseWriter, *http.Request, *LayoutDot) error
 }
 
 type liveViewRequestContextKey struct{}
@@ -118,14 +117,14 @@ func (c *Config) Middleware(next http.Handler) http.Handler {
 
 		// Users may overwrite this in WriteLayout if they wish.
 		csrf := uuid.New().String()
-		meta := Meta{
+		meta := &Meta{
 			Uploads:   uploadConfigs,
 			CSRFToken: csrf,
 		}
 
 		t := lv.Render(ctx, meta)
 
-		dot := &LiveViewDot{
+		dot := &LayoutDot{
 			LiveViewID:   uuid.New().String(), // TODO use nanoID or something shorter?
 			CSRFToken:    csrf,
 			View:         lv,
@@ -161,7 +160,7 @@ type Params struct {
 // View is a live view which requires a Render method in order to be
 // rendered for HTML and WebSocket requests.
 type View interface {
-	Render(context.Context, Meta) *htmltmpl.Template
+	Render(context.Context, *Meta) *htmltmpl.Template
 }
 
 // Mounter is an interface that can be implemented by a View to be notified
@@ -725,18 +724,17 @@ func (s *socket) handleUpload(ctx context.Context, up *phx.UploadMsg) (res [][]b
 var upgrader = &websocket.Upgrader{ReadBufferSize: 1024, WriteBufferSize: 1024}
 
 func (s *socket) renderToTree(ctx context.Context) (*tmpl.Tree, error) {
-	meta := Meta{
+	meta := &Meta{
 		URL:       s.url,
 		CSRFToken: s.csrfToken,
 		Uploads:   s.uploadConfigs,
 	}
 	t := s.view.Render(ctx, meta)
 
-	dot, err := dotFromView(s.view)
-	if err != nil {
-		return nil, err
+	dot := &Dot{
+		V:    s.view,
+		Meta: meta,
 	}
-	dot["Meta"] = meta
 
 	tree, err := t.ExecuteTree(dot)
 	// add title part to tree if it is set
@@ -797,43 +795,31 @@ func socketValue(ctx context.Context) *socket {
 	return s
 }
 
-// dotFromView extracts the fields from the view and returns a map
-// which is used as the basis for the dot used in the template
-func dotFromView(lv View) (map[string]any, error) {
-	// map struct fields to dot
-	dot := make(map[string]any)
-	v := reflect.ValueOf(lv)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-	// ensure view is a struct
-	if v.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("s.view should be a struct but is a %T", v)
-	}
-	typ := v.Type()
-	for i := 0; i < v.NumField(); i++ {
-		f := typ.Field(i)
-		vf := v.Field(i)
-		// skip unexported fields
-		if vf.CanInterface() {
-			dot[f.Name] = v.Field(i).Interface()
-		}
-	}
-	return dot, nil
+// Dot is the set of data accessible to Views when rendering, both mounted and unmounted.
+type Dot struct {
+	// V is the rendering View struct.
+	// While technically possible, we advise against calling its lifecycle methods from templates.
+	V View
+	// Meta contains information necessary for tracking LiveView state over time.
+	Meta *Meta
 }
 
+// PageTitleConfig structures the contents of a page’s title tag. It’s available in WriteLayout for your own use,
+// and subsequent PageTitle() calls will update the title while preserving Prefix and Suffix.
 type PageTitleConfig struct {
 	Title  string
 	Prefix string
 	Suffix string
 }
 
-type LiveViewDot struct {
+// LayoutDot is the information available when initially writing our your container layout.
+// It should be passed into the liveViewContainerTag funcmap func if you choose to use it.
+type LayoutDot struct {
 	PageTitle    PageTitleConfig
 	Static       string
 	LiveViewID   string
 	CSRFToken    string
 	ViewTemplate *htmltmpl.Template
 	View         View
-	Meta         Meta
+	Meta         *Meta
 }

@@ -44,10 +44,10 @@ func (c *Counter) HandleEvent(ctx context.Context, e *live.Event) error {
     return nil
 }
 
-func (c *Counter) Render(ctx context.Context, meta live.Meta) *htmltmpl.Template {
+func (c *Counter) Render(ctx context.Context, meta *live.Meta) *htmltmpl.Template {
     return htmltmpl.Must(htmltmpl.New("liveView").Parse(`
         <div>
-            <h1>Count is: {{ .Count }}</h1>
+            <h1>Count is: {{ .V.Count }}</h1>
             <button phx-click="decrement">-</button>
             <button phx-click="increment">+</button>
         </div>
@@ -55,7 +55,7 @@ func (c *Counter) Render(ctx context.Context, meta live.Meta) *htmltmpl.Template
 }
 ```
 
-As you can see, the struct itself represents the state of your view. The `phx-click` attributes correspond to event types in our `HandleEvent` handler. After an event is handled, the view is recalculated and new state communicated via WebSocket to the client where it is displayed.
+As you can see, the struct itself represents the state of your view. The `phx-click` attributes correspond to event types in our `HandleEvent` handler. After an event is handled, the view is recalculated and new state communicated via WebSocket to the client where it is displayed. You can access your view’s fields and methods from your template as `.V`.
 
 You can find more examples in the `examples/` directory. To run:
 
@@ -123,7 +123,7 @@ liveConfig := live.Config{
     // Note that you may use a different router as your live.Config.Mux if you wish.
     Mux:         r,
     // This hook lets us inject whatever data/HTML we might need to our live views.
-    WriteLayout: func(w http.ResponseWriter, r *http.Request, lvd *live.LiveViewDot) error {
+    WriteLayout: func(w http.ResponseWriter, r *http.Request, lvd *live.LayoutDot) error {
         lvd.PageTitle.Prefix = "GoLive - "
         dot := make(map[string]any)
         dot["LiveView"] = lvd
@@ -155,6 +155,12 @@ r.HandleFunc("/user/{user_id}", func(w http.ResponseWriter, r *http.Request) {
 
 > **Note**  
 > When you patch a view in GoLive, we first give you an opportunity to re-handle the “request,” parsing it as needed, before calling `HandleParams`. In Phoenix terms, path params are handled different from URL query params: path params are parsed out at the muxer layer, URL query params in the more traditional `HandleParams` callback. This is a consequence of our decision to let you bring your own muxer, but may be unexpected for those familiar with Phoenix.
+
+## live.JS
+
+GoLive includes a struct, `JS`, that provides API to precompose client-side commands that do not require a roundtrip to the server, [much like Phoenix.LiveView.JS](https://hexdocs.pm/phoenix_live_view/Phoenix.LiveView.JS.html) does. This is useful for doing light DOM manipulation without writing JavaScript, and is a feature of the `phoenix_live_view` JavaScript client protocol.
+
+Currently only `Hide`, `Show`, and `Toggle` are implemented; we plan to implement the remaining utility commands soon.
 
 ## License
 
