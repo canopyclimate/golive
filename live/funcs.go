@@ -84,20 +84,19 @@ func Navigation(linkType, path string, params map[string]any, text string) (html
 }
 
 // LiveView renders a container for a live.View - required for layoutTemplates.
-func LiveViewTag(lvd *LiveViewDot) (htmltmpl.HTML, error) {
+func LiveViewTag(ld *LayoutDot) (htmltmpl.HTML, error) {
 	var buf strings.Builder
 	buf.WriteString(fmt.Sprintf(`
 		<div
 			data-phx-main="true"
 			data-phx-session=""
 			data-phx-static="%s"
-			id="phx-%s">`, lvd.Static, lvd.LiveViewID))
-	dot, err := dotFromView(lvd.View)
-	if err != nil {
-		return "", nil
+			id="phx-%s">`, ld.Static, ld.LiveViewID))
+	dot := &Dot{
+		V:    ld.View,
+		Meta: ld.Meta,
 	}
-	dot["Meta"] = lvd.Meta
-	err = lvd.ViewTemplate.ExecuteTemplate(&buf, lvd.ViewTemplate.Name(), dot)
+	err := ld.ViewTemplate.ExecuteTemplate(&buf, ld.ViewTemplate.Name(), dot)
 	if err != nil {
 		return "", err
 	}
