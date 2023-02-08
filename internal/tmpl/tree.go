@@ -33,6 +33,12 @@ func (t *Tree) AppendStatic(text string) {
 	if t.rangeStep > 0 {
 		return
 	}
+	// When a comment is present, it causes two consecutive statics.
+	// Concatenate those statics to preserve the alternating statics/dynamics invariant.
+	if len(t.Statics) > len(t.Dynamics) {
+		t.Statics[len(t.Statics)-1] += text
+		return
+	}
 	t.Statics = append(t.Statics, text)
 }
 
