@@ -47,7 +47,7 @@
 
 <!-- render the photos -->
 <ul id="photos_list" phx-update="prepend">    
-  {{ range $photo := .V.Photos }}
+  {{ range $photo := .Photos }}
     <li id="{{$photo.ID}}">
       <img src="{{ $photo.URL }}" style="width: 200px; height: 200px; object-fit: cover;"/>
     </li>

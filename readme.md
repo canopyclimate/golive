@@ -44,14 +44,14 @@ func (c *Counter) HandleEvent(ctx context.Context, e *live.Event) error {
     return nil
 }
 
-func (c *Counter) Render(ctx context.Context, meta *live.Meta) *htmltmpl.Template {
+func (c *Counter) Render(ctx context.Context, meta *live.Meta) (*htmltmpl.Template, any) {
     return htmltmpl.Must(htmltmpl.New("liveView").Parse(`
         <div>
-            <h1>Count is: {{ .V.Count }}</h1>
+            <h1>Count is: {{ .Count }}</h1>
             <button phx-click="decrement">-</button>
             <button phx-click="increment">+</button>
         </div>
-    `))
+    `)),c
 }
 ```
 

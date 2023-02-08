@@ -24,10 +24,10 @@ import (
 type Config struct {
 	// Mux is a http.Handler that routes requests to Views.
 	Mux http.Handler
-	// WriteLayout is a func that writes your base layout HTML to a response writer for a given request and dot.
+	// RenderLayout is a func that writes your base layout HTML to a response writer for a given request and dot.
 	// You are responsible for carrying the contents of the LayoutDot through to your layout template.
 	// If your layout template uses the {{ liveViewContainerTag }} func, it should be passed the contents of LayoutDot as its argument.
-	WriteLayout func(http.ResponseWriter, *http.Request, *LayoutDot) error
+	RenderLayout func(http.ResponseWriter, *http.Request, *LayoutDot) (*htmltmpl.Template, any)
 }
 
 type liveViewRequestContextKey struct{}
@@ -115,19 +115,18 @@ func (c *Config) Middleware(next http.Handler) http.Handler {
 			CSRFToken: csrf,
 		}
 
-		t := lv.Render(ctx, meta)
+		lvt, lvd := lv.Render(ctx, meta)
 
-		dot := &LayoutDot{
+		ldot := &LayoutDot{
 			LiveViewID:   uuid.New().String(), // TODO use nanoID or something shorter?
 			CSRFToken:    csrf,
-			View:         lv,
 			PageTitle:    ptc,
-			ViewTemplate: t,
-			Meta:         meta,
+			ViewTemplate: lvt,
+			ViewDot:      lvd,
 		}
 
-		// TODO: Fallback to a hardcoded base layout if WriteLayout isn't set.
-		err := c.WriteLayout(w, r, dot)
+		lt, ld := c.RenderLayout(w, r, ldot)
+		err := lt.Execute(w, ld)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -153,7 +152,7 @@ type Params struct {
 // View is a live view which requires a Render method in order to be
 // rendered for HTML and WebSocket requests.
 type View interface {
-	Render(context.Context, *Meta) *htmltmpl.Template
+	Render(context.Context, *Meta) (*htmltmpl.Template, any)
 }
 
 // Mounter is an interface that can be implemented by a View to be notified
@@ -714,12 +713,7 @@ func (s *socket) renderToTree(ctx context.Context) (*tmpl.Tree, error) {
 		CSRFToken: s.csrfToken,
 		Uploads:   s.uploadConfigs,
 	}
-	t := s.view.Render(ctx, meta)
-
-	dot := &Dot{
-		V:    s.view,
-		Meta: meta,
-	}
+	t, dot := s.view.Render(ctx, meta)
 
 	tree, err := t.ExecuteTree(dot)
 	// add title part to tree if it is set
@@ -780,15 +774,6 @@ func socketValue(ctx context.Context) *socket {
 	return s
 }
 
-// Dot is the set of data accessible to Views when rendering, both mounted and unmounted.
-type Dot struct {
-	// V is the rendering View struct.
-	// While technically possible, we advise against calling its lifecycle methods from templates.
-	V View
-	// Meta contains information necessary for tracking LiveView state over time.
-	Meta *Meta
-}
-
 // PageTitleConfig structures the contents of a page’s title tag. It’s available in WriteLayout for your own use,
 // and subsequent PageTitle() calls will update the title while preserving Prefix and Suffix.
 type PageTitleConfig struct {
@@ -805,6 +790,5 @@ type LayoutDot struct {
 	LiveViewID   string
 	CSRFToken    string
 	ViewTemplate *htmltmpl.Template
-	View         View
-	Meta         *Meta
+	ViewDot      any
 }
