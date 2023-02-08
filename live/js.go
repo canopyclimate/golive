@@ -3,10 +3,11 @@ package live
 import (
 	"encoding/json"
 	"strings"
+	"time"
 )
 
 // DefaultTransitionDuration_ms is the default duration, in milliseconds, of live.JS transitions.
-const DefaultTransitionDuration_ms = int32(200)
+const DefaultTransitionDuration = 200 * time.Millisecond
 
 type op struct {
 	kind string
@@ -20,13 +21,13 @@ type JS struct {
 }
 
 // Hide hides elements.
-// When the action is triggered on the client, phx:hide-start is dispatched to the hidden elements. After the time specified by :time, phx:hide-end is dispatched.
+// When the action is triggered on the client, phx:hide-start is dispatched to the hidden elements. After the time specified by opts.Time, phx:hide-end is dispatched.
 func (js *JS) Hide(opts *HideOpts) {
 	js.add("hide", opts)
 }
 
 // Show shows elements.
-// When the action is triggered on the client, phx:show-start is dispatched to the shown elements. After the time specified by :time, phx:show-end is dispatched.
+// When the action is triggered on the client, phx:show-start is dispatched to the shown elements. After the time specified by opts.Time, phx:show-end is dispatched.
 func (js *JS) Show(opts *ShowOpts) {
 	js.add("show", opts)
 }
@@ -79,25 +80,23 @@ type HideOpts struct {
 	To string
 	// Transition to apply, if any.
 	Transition *Transition
-	// Time is the duration in milliseconds of the transition, if present; defaults to DefaultTransitionDuration_ms if 0.
-	Time int32
+	// Time is the duration of the transition, if present; defaults to DefaultTransitionDuration if 0.
+	Time time.Duration
 }
 
 func (o *HideOpts) args() map[string]any {
 	var to *string
-	time := DefaultTransitionDuration_ms
-	transition := &Transition{}
+	time := DefaultTransitionDuration
+	var transition *Transition
 	if o != nil {
 		to = &o.To
 		if o.Time != 0 {
 			time = o.Time
 		}
-		if o.Transition != nil {
-			transition = o.Transition
-		}
+		transition = o.Transition
 	}
 	return map[string]any{
-		"time":       time,
+		"time":       time.Milliseconds(),
 		"to":         to,
 		"transition": transition.phx(),
 	}
@@ -108,31 +107,29 @@ type ShowOpts struct {
 	To string
 	// Transition to apply, if any.
 	Transition *Transition
-	// Time is the duration in milliseconds of the transition, if present; defaults to DefaultTransitionDuration_ms if 0.
-	Time int32
+	// Time is the duration of the transition, if present; defaults to DefaultTransitionDuration if 0.
+	Time time.Duration
 	// Display is the CSS display value to set when showing; defaults to "block".
 	Display string
 }
 
 func (o *ShowOpts) args() map[string]any {
 	var to *string
-	time := DefaultTransitionDuration_ms
-	transition := &Transition{}
+	time := DefaultTransitionDuration
+	var transition *Transition
 	display := "block"
 	if o != nil {
 		to = &o.To
 		if o.Time != 0 {
 			time = o.Time
 		}
-		if o.Transition != nil {
-			transition = o.Transition
-		}
+		transition = o.Transition
 		if o.Display != "" {
 			display = o.Display
 		}
 	}
 	return map[string]any{
-		"time":       time,
+		"time":       time.Milliseconds(),
 		"to":         to,
 		"transition": transition.phx(),
 		"display":    display,
@@ -146,35 +143,30 @@ type ToggleOpts struct {
 	In *Transition
 	// Out is the transition to apply when hiding the element.
 	Out *Transition
-	// Time is the duration in milliseconds of the relevant transition, if present; defaults to DefaultTransitionDuration_ms if 0.
-	Time int32
+	// Time is the duration of the transition, if present; defaults to DefaultTransitionDuration if 0.
+	Time time.Duration
 	// Display is the CSS display value to set when showing; defaults to "block".
 	Display string
 }
 
 func (o *ToggleOpts) args() map[string]any {
 	var to *string
-	time := DefaultTransitionDuration_ms
-	in := &Transition{}
-	out := &Transition{}
+	time := DefaultTransitionDuration
+	var in, out *Transition
 	display := "block"
 	if o != nil {
 		to = &o.To
 		if o.Time != 0 {
 			time = o.Time
 		}
-		if o.In != nil {
-			in = o.In
-		}
-		if o.Out != nil {
-			out = o.Out
-		}
+		in = o.In
+		out = o.Out
 		if o.Display != "" {
 			display = o.Display
 		}
 	}
 	return map[string]any{
-		"time":    time,
+		"time":    time.Milliseconds(),
 		"to":      to,
 		"ins":     in.phx(),
 		"outs":    out.phx(),
@@ -190,6 +182,9 @@ func phxClasses(class string) []string {
 }
 
 func (t *Transition) phx() [3][]string {
+	if t == nil {
+		return [3][]string{{}, {}, {}}
+	}
 	return [3][]string{
 		phxClasses(t.TransitionClass),
 		phxClasses(t.StartClass),

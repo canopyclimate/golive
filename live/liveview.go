@@ -157,6 +157,9 @@ type Params struct {
 // View is a live view which requires a Render method in order to be
 // rendered for HTML and WebSocket requests.
 type View interface {
+	// Render returns the dot and template needed to turn a LiveView into HTML.
+	// Commonly the returned dot is the receiver; however, any data needed to render the template is acceptable.
+	// Note that if the View uses any upload live.Funcs() the *Meta argument should be passed through to the template.
 	Render(context.Context, *Meta) (any, *htmltmpl.Template)
 }
 

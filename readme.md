@@ -55,7 +55,7 @@ func (c *Counter) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl.T
 }
 ```
 
-As you can see, the struct itself represents the state of your view. The `phx-click` attributes correspond to event types in our `HandleEvent` handler. After an event is handled, the view is recalculated and new state communicated via WebSocket to the client where it is displayed. The `Render` method is responsible for returning the "dot" and the template that is used to render the LiveView.
+As you can see, the struct itself represents the state of your view. The `phx-click` attributes correspond to event types in our `HandleEvent` handler. After an event is handled, the view is recalculated and new state communicated via WebSocket to the client where it is displayed. The `Render` method is responsible for returning the “dot” and template that is used to render the LiveView.
 
 You can find more examples in the `examples/` directory. To run:
 
@@ -160,7 +160,7 @@ liveRouter.HandleFunc("/user/{user_id}", func(w http.ResponseWriter, r *http.Req
 
 GoLive includes a struct, `JS`, that provides API to precompose client-side commands that do not require a roundtrip to the server, [much like Phoenix.LiveView.JS](https://hexdocs.pm/phoenix_live_view/Phoenix.LiveView.JS.html) does. This is useful for doing light DOM manipulation without writing JavaScript, and is a feature of the `phoenix_live_view` JavaScript client protocol.
 
-Currently only `Hide`, `Show`, and `Toggle` are implemented; we plan to implement the remaining utility commands soon.
+Currently only `Hide`, `Show`, and `Toggle` are implemented; we plan to implement the remaining utility commands soon (“soon”).
 
 ## License
 
