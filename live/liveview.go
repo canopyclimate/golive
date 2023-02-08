@@ -125,8 +125,8 @@ func (c *Config) Middleware(next http.Handler) http.Handler {
 			LiveViewID:   uuid.New().String(), // TODO use nanoID or something shorter?
 			CSRFToken:    csrf,
 			PageTitle:    ptc,
-			ViewTemplate: lvt,
-			ViewDot:      lvd,
+			viewTemplate: lvt,
+			viewDot:      lvd,
 		}
 
 		// TODO: Fallback to a hardcoded base layout if WriteLayout isn't set.
@@ -794,6 +794,10 @@ type LayoutDot struct {
 	Static       string
 	LiveViewID   string
 	CSRFToken    string
-	ViewTemplate *htmltmpl.Template
-	ViewDot      any
+	viewTemplate *htmltmpl.Template
+	viewDot      any
+}
+
+func (d *LayoutDot) ExecuteViewTemplate(buf *strings.Builder) error {
+	return d.viewTemplate.ExecuteTemplate(buf, d.viewTemplate.Name(), d.viewDot)
 }

@@ -87,7 +87,7 @@ func LiveViewTag(ld *LayoutDot) (htmltmpl.HTML, error) {
 			data-phx-session=""
 			data-phx-static="%s"
 			id="phx-%s">`, ld.Static, ld.LiveViewID))
-	err := ld.ViewTemplate.ExecuteTemplate(&buf, ld.ViewTemplate.Name(), ld.ViewDot)
+	err := ld.ExecuteViewTemplate(&buf)
 	if err != nil {
 		return "", err
 	}
