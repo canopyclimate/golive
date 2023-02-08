@@ -44,10 +44,10 @@ func (c *Counter) HandleEvent(ctx context.Context, e *live.Event) error {
     return nil
 }
 
-func (c *Counter) Render(ctx context.Context, meta *live.Meta) *htmltmpl.Template {
-    return htmltmpl.Must(htmltmpl.New("liveView").Parse(`
+func (c *Counter) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl.Template) {
+    return c, htmltmpl.Must(htmltmpl.New("liveView").Parse(`
         <div>
-            <h1>Count is: {{ .V.Count }}</h1>
+            <h1>Count is: {{ .Count }}</h1>
             <button phx-click="decrement">-</button>
             <button phx-click="increment">+</button>
         </div>
@@ -55,7 +55,7 @@ func (c *Counter) Render(ctx context.Context, meta *live.Meta) *htmltmpl.Templat
 }
 ```
 
-As you can see, the struct itself represents the state of your view. The `phx-click` attributes correspond to event types in our `HandleEvent` handler. After an event is handled, the view is recalculated and new state communicated via WebSocket to the client where it is displayed. You can access your view’s fields and methods from your template as `.V`.
+As you can see, the struct itself represents the state of your view. The `phx-click` attributes correspond to event types in our `HandleEvent` handler. After an event is handled, the view is recalculated and new state communicated via WebSocket to the client where it is displayed. The `Render` method is responsible for returning the "dot" and the template that is used to render the LiveView.
 
 You can find more examples in the `examples/` directory. To run:
 
@@ -123,12 +123,10 @@ t := htmltmpl.Must(tmpl.ParseFiles("path/to/layout.gohtml"))
 
 liveConfig := live.Config{
     Mux:         liveRouter,
-    // This hook lets us inject whatever data/HTML we might need to our live views.
-    WriteLayout: func(w http.ResponseWriter, r *http.Request, lvd *live.LayoutDot) error {
+    // RenderLayout provides a way to render your root layout for all LiveViews.  Similar to `Render` on LiveViews, it returns a "dot" and a template which is used to render the layout.
+    RenderLayout: func(w http.ResponseWriter, r *http.Request, lvd *live.LayoutDot) (any, *htmltmpl.Template) {
         lvd.PageTitle.Prefix = "GoLive - "
-        dot := make(map[string]any)
-        dot["LiveView"] = lvd
-        return t.Execute(w, dot)
+        return lvd, t
     },
 }
 
