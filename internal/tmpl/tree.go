@@ -61,6 +61,9 @@ func (t *Tree) AppendSub() *Tree {
 }
 
 func (t *Tree) IncRangeStep() {
+	if t == nil {
+		return
+	}
 	t.rangeStep++
 }
 
