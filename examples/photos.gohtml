@@ -5,24 +5,24 @@
 
   <div>
     <!-- file input / drag and drop -->
-    <div phx-drop-target="{{(index .Meta.Uploads "photos").Ref}}" style="border: 2px dashed #ccc; padding: 10px; margin: 10px 0;">
-      {{liveFileInputTag (index .Meta.Uploads "photos")}}
+    <div phx-drop-target="{{.UploadPhotos.Ref}}" style="border: 2px dashed #ccc; padding: 10px; margin: 10px 0;">
+      {{liveFileInputTag .UploadPhotos}}
       or drag and drop files here 
     </div>        
     <!-- help text -->
     <div style="font-size: 10px; padding-bottom: 3rem">
-      Add up to {{ (index .Meta.Uploads "photos").MaxEntries }} photos
-      (max {{ (index .Meta.Uploads "photos").MaxFileSize }} bytes each)
+      Add up to {{ .UploadPhotos.MaxEntries }} photos
+      (max {{ .UploadPhotos.MaxFileSize }} bytes each)
     </div>
   </div>
   
   <!-- any errors from the upload -->
-  {{ range $err := (index .Meta.Uploads "photos").Errors }}
+  {{ range $err := .UploadPhotos.Errors }}
     <p class="invalid-feedback">{{ $err }}</p>
   {{ end }}
 
   <!-- render the preview, progress, and cancel button of the selected files -->
-  {{ range $entry := (index .Meta.Uploads "photos").Entries }}
+  {{ range $entry := .UploadPhotos.Entries }}
     <div style="display: flex; align-items: center;">
       <div style="width: 250px; margin: 2rem 0;">{{liveImgPreviewTag $entry}}</div>
       <div style="display: flex; align-items: center; margin-left: 2rem;">
@@ -42,12 +42,12 @@
   {{ end }}
 
   <!-- submit button -->
-  {{ submitTag "Upload" (dict "PhxDisableWith" "Saving..." "Disabled" (gt (len (index .Meta.Uploads "photos").Errors) 0))}}
+  {{ submitTag "Upload" (dict "PhxDisableWith" "Saving..." "Disabled" (gt (len .UploadPhotos.Errors) 0))}}
 </form>
 
 <!-- render the photos -->
 <ul id="photos_list" phx-update="prepend">    
-  {{ range $photo := .V.Photos }}
+  {{ range $photo := .Photos }}
     <li id="{{$photo.ID}}">
       <img src="{{ $photo.URL }}" style="width: 200px; height: 200px; object-fit: cover;"/>
     </li>

@@ -1,17 +1,17 @@
 {{/* The following is taken directly from the LiveView.JS docs: https://hexdocs.pm/phoenix_live_view/Phoenix.LiveView.JS.html */}}
-<button type="button" phx-click="{{ .V.ShowModal }}">Show modal</button>
-<div id="modal" class="phx-modal" phx-remove="{{ .V.HideModal }}" style="display: none;">
+<button type="button" phx-click="{{ .ShowModal }}">Show modal</button>
+<div id="modal" class="phx-modal" phx-remove="{{ .HideModal }}" style="display: none;">
   <div
     id="modal-content"
     class="phx-modal-content"
-    phx-click-away="{{ .V.HideModal }}"
-    phx-window-keydown="{{ .V.HideModal }}"
+    phx-click-away="{{ .HideModal }}"
+    phx-window-keydown="{{ .HideModal }}"
     phx-key="escape"
     style="display: none;"
   >
-    <button class="phx-modal-close" phx-click="{{ .V.HideModal }}">✖</button>
-    <p>{{ .V.Text }}</p>
-    <button phx-click="{{ .V.Toggle "#toggle-me" }}">Toggle text below</button>
+    <button class="phx-modal-close" phx-click="{{ .HideModal }}">✖</button>
+    <p>{{ .Text }}</p>
+    <button phx-click="{{ .Toggle "#toggle-me" }}">Toggle text below</button>
     <p id="toggle-me">Toggled on!!</p>
   </div>
 </div>

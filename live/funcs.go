@@ -27,17 +27,12 @@ func Funcs() htmltmpl.FuncMap {
 }
 
 // TitleTag renders a title tag that can be updated from Views.
-func TitleTag(title, prefix, suffix string) (htmltmpl.HTML, error) {
-	dot := map[string]any{
-		"Title":  title,
-		"Prefix": prefix,
-		"Suffix": suffix,
-	}
+func TitleTag(config PageTitleConfig) (htmltmpl.HTML, error) {
 	tmpl := htmltmpl.Must(htmltmpl.New("liveTitleTag").Parse(
 		`<title{{if .Prefix}} data-prefix="{{.Prefix}}"{{end}}{{if .Suffix}} data-suffix="{{.Suffix}}"{{end}}>{{.Prefix}}{{.Title}}{{.Suffix}}</title>`,
 	))
 	var buf strings.Builder
-	err := tmpl.Execute(&buf, dot)
+	err := tmpl.Execute(&buf, config)
 	if err != nil {
 		return "", err
 	}
@@ -92,11 +87,7 @@ func LiveViewTag(ld *LayoutDot) (htmltmpl.HTML, error) {
 			data-phx-session=""
 			data-phx-static="%s"
 			id="phx-%s">`, ld.Static, ld.LiveViewID))
-	dot := &Dot{
-		V:    ld.View,
-		Meta: ld.Meta,
-	}
-	err := ld.ViewTemplate.ExecuteTemplate(&buf, ld.ViewTemplate.Name(), dot)
+	err := ld.ExecuteViewTemplate(&buf)
 	if err != nil {
 		return "", err
 	}

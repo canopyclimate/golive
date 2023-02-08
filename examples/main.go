@@ -53,12 +53,9 @@ func main() {
 
 	liveConfig := live.Config{
 		Mux: lr,
-		WriteLayout: func(w http.ResponseWriter, r *http.Request, lvd *live.LayoutDot) error {
+		RenderLayout: func(w http.ResponseWriter, r *http.Request, lvd *live.LayoutDot) (any, *htmltmpl.Template) {
 			lvd.PageTitle.Prefix = "GoLive - "
-			t := loadTemplate("./examples/layout.gohtml", myFuncs)
-			dot := make(map[string]any)
-			dot["LiveView"] = lvd
-			return t.Execute(w, dot)
+			return lvd, loadTemplate("./examples/layout.gohtml", myFuncs)
 		},
 	}
 	// setup static route
@@ -195,30 +192,30 @@ func (c *Counter) HandleEvent(ctx context.Context, e *live.Event) error {
 	return nil
 }
 
-func (c *Counter) Render(ctx context.Context, meta *live.Meta) *htmltmpl.Template {
-	return htmltmpl.Must(htmltmpl.New("liveView").Funcs(myFuncs).Parse(`
+func (c *Counter) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl.Template) {
+	return c, htmltmpl.Must(htmltmpl.New("liveView").Funcs(myFuncs).Parse(`
 			<div>
 				Go to Nav: {{ liveNav "navigate" "/nav" (dict "" "") "Nav" }}
-				<h1>Count is: {{ .V.Count }}</h1>
+				<h1>Count is: {{ .Count }}</h1>
 				<button phx-click="decrement">-</button>
 				<button phx-click="increment">+</button>
 			</div>
 			{{ foo}}
 			<form phx-submit="submit" phx-change="change">
-				First {{ inputTag .V.Changeset "First" }}
-				{{ errorTag .V.Changeset "First" }}
+				First {{ inputTag .Changeset "First" }}
+				{{ errorTag .Changeset "First" }}
 				<br />
-				Last {{ inputTag .V.Changeset "Last" }}
-				{{ errorTag .V.Changeset "Last" }}
+				Last {{ inputTag .Changeset "Last" }}
+				{{ errorTag .Changeset "Last" }}
 				<br />
 				<input type="submit" value="Submit" />
 			</form>
-			{{ if and .V.First .V.Last }}
-				<h1>Hello {{ .V.First }} {{ .V.Last }}</h1>
+			{{ if and .First .Last }}
+				<h1>Hello {{ .First }} {{ .Last }}</h1>
 			{{ end }}
 
 			<div>
-			  Counter that updates every second: {{ .V.Ticks }}
+			  Counter that updates every second: {{ .Ticks }}
 			</div>
 		`))
 }
@@ -254,8 +251,8 @@ func (n *Nav) HandleParams(ctx context.Context, url *url.URL) error {
 	return nil
 }
 
-func (n *Nav) Render(ctx context.Context, meta *live.Meta) *htmltmpl.Template {
-	return loadTemplate("./examples/nav.gohtml", myFuncs)
+func (n *Nav) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl.Template) {
+	return n, loadTemplate("./examples/nav.gohtml", myFuncs)
 }
 
 func (n *Nav) PageTitleConfig() live.PageTitleConfig {
@@ -291,15 +288,15 @@ func (v *MoreEvents) HandleEvent(ctx context.Context, e *live.Event) error {
 	return nil
 }
 
-func (v *MoreEvents) Render(ctx context.Context, meta *live.Meta) *htmltmpl.Template {
-	return htmltmpl.Must(htmltmpl.New("liveView").Funcs(myFuncs).Parse(`
+func (v *MoreEvents) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl.Template) {
+	return v, htmltmpl.Must(htmltmpl.New("liveView").Funcs(myFuncs).Parse(`
 			<div>
 				<div>
-					<h2>Volume: {{ .V.Volume}}</h2>
+					<h2>Volume: {{ .Volume}}</h2>
           <progress
             id="volume_control"
             style="width: 300px; height: 2em;"
-            value="{{ .V.Volume }}"
+            value="{{ .Volume }}"
             max="100"></progress>
 					<br />
 					<p>Use ⬇️ or ⬆️ keys to control the volume or buttons below</p>
@@ -310,7 +307,7 @@ func (v *MoreEvents) Render(ctx context.Context, meta *live.Meta) *htmltmpl.Temp
 					<h2>Blur/Focus</h2>				
 					<input type="text" name="Focused" placeholder="click to focus" phx-focus="focus" phx-blur="blur" />
 					<br />
-					Input is {{ if not .V.Focused}}not{{end}} focused
+					Input is {{ if not .Focused}}not{{end}} focused
 				</div>
 			</div>
 		`))
@@ -342,8 +339,16 @@ func (lv *MyPhotos) Mount(ctx context.Context, p live.Params) error {
 	return nil
 }
 
-func (lv *MyPhotos) Render(ctx context.Context, meta *live.Meta) *htmltmpl.Template {
-	return loadTemplate("./examples/photos.gohtml", myFuncs)
+func (lv *MyPhotos) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl.Template) {
+	type myPhotos struct {
+		*MyPhotos
+		UploadPhotos *live.UploadConfig
+	}
+	dot := myPhotos{
+		MyPhotos:     lv,
+		UploadPhotos: meta.Uploads[uploadName],
+	}
+	return dot, loadTemplate("./examples/photos.gohtml", myFuncs)
 }
 
 func (lv *MyPhotos) HandleEvent(ctx context.Context, e *live.Event) error {
@@ -431,6 +436,6 @@ func (m *ModalDemo) Mount(ctx context.Context, p live.Params) error {
 	return nil
 }
 
-func (m *ModalDemo) Render(ctx context.Context, meta *live.Meta) *htmltmpl.Template {
-	return loadTemplate("./examples/modal.gohtml", myFuncs)
+func (m *ModalDemo) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl.Template) {
+	return m, loadTemplate("./examples/modal.gohtml", myFuncs)
 }
