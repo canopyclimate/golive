@@ -40,6 +40,37 @@ func TestExplore(t *testing.T) {
 		fmt.Println("----")
 	}
 }
+func TestComments(t *testing.T) {
+	x, err := New("x").Parse("<div> {{ .X }} def {{/* comment */}} xyz</div>")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, dot := range []any{
+		map[string]int{"X": 5},
+		map[string]int{"X": 0},
+	} {
+		lt, err := x.ExecuteTree(dot)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, err := json.Marshal(lt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(lt.Dynamics)+1 != len(lt.Statics) {
+			t.Fatalf("expected len(lt.Dynamics)+1 to be len(lt.Statics), but %d + 1 != %d", len(lt.Dynamics), len(lt.Statics))
+		}
+		lt.ExcludeStatics = true
+		wout, err := json.Marshal(lt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fmt.Println(dot, ":")
+		fmt.Println("w/Statics", string(out))
+		fmt.Println("w/o Statics", string(wout))
+		fmt.Println("----")
+	}
+}
 
 func TestWithRange(t *testing.T) {
 	x, err := New("x").Parse("<div> {{ range $x := .X }} X is {{$x}} {{ end }}</div>")
