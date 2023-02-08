@@ -24,9 +24,13 @@ import (
 type Config struct {
 	// Mux is a http.Handler that routes requests to Views.
 	Mux http.Handler
-	// RenderLayout is a func that writes your base layout HTML to a response writer for a given request and dot.
-	// You are responsible for carrying the contents of the LayoutDot through to your layout template.
-	// If your layout template uses the {{ liveViewContainerTag }} func, it should be passed the contents of LayoutDot as its argument.
+	// RenderLayout is a func that provides a way to render your base layout HTML for all LiveViews.
+	// You are provides with the http.ResponseWriter, *http.Request, and a *LayoutDot and are responsible for
+	// providing the "dot" and the template that will be executed on the initial HTML render.
+	// Your template should always do at least the following:
+	//  - Load your LiveView Client Javascript (e.g. <script defer type="text/javascript" src="/js/index.js"></script>) without this, your LiveView will not work.
+	//  - Pass the LayoutDot to the liveViewContainerTag (i.e. {{ liveViewContainerTag .LayoutDot }})
+	//  - Set the CSRF token in a meta tag (i.e. <meta name="csrf-token" content="{{ .LayoutDot.CSRFToken }}">)
 	RenderLayout func(http.ResponseWriter, *http.Request, *LayoutDot) (any, *htmltmpl.Template)
 }
 
@@ -125,6 +129,7 @@ func (c *Config) Middleware(next http.Handler) http.Handler {
 			ViewDot:      lvd,
 		}
 
+		// TODO: Fallback to a hardcoded base layout if WriteLayout isn't set.
 		ld, lt := c.RenderLayout(w, r, ldot)
 		err := lt.Execute(w, ld)
 		if err != nil {
