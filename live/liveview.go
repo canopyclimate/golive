@@ -27,7 +27,7 @@ type Config struct {
 	// RenderLayout is a func that writes your base layout HTML to a response writer for a given request and dot.
 	// You are responsible for carrying the contents of the LayoutDot through to your layout template.
 	// If your layout template uses the {{ liveViewContainerTag }} func, it should be passed the contents of LayoutDot as its argument.
-	RenderLayout func(http.ResponseWriter, *http.Request, *LayoutDot) (*htmltmpl.Template, any)
+	RenderLayout func(http.ResponseWriter, *http.Request, *LayoutDot) (any, *htmltmpl.Template)
 }
 
 type liveViewRequestContextKey struct{}
@@ -115,7 +115,7 @@ func (c *Config) Middleware(next http.Handler) http.Handler {
 			CSRFToken: csrf,
 		}
 
-		lvt, lvd := lv.Render(ctx, meta)
+		lvd, lvt := lv.Render(ctx, meta)
 
 		ldot := &LayoutDot{
 			LiveViewID:   uuid.New().String(), // TODO use nanoID or something shorter?
@@ -125,7 +125,7 @@ func (c *Config) Middleware(next http.Handler) http.Handler {
 			ViewDot:      lvd,
 		}
 
-		lt, ld := c.RenderLayout(w, r, ldot)
+		ld, lt := c.RenderLayout(w, r, ldot)
 		err := lt.Execute(w, ld)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -152,7 +152,7 @@ type Params struct {
 // View is a live view which requires a Render method in order to be
 // rendered for HTML and WebSocket requests.
 type View interface {
-	Render(context.Context, *Meta) (*htmltmpl.Template, any)
+	Render(context.Context, *Meta) (any, *htmltmpl.Template)
 }
 
 // Mounter is an interface that can be implemented by a View to be notified
@@ -713,7 +713,7 @@ func (s *socket) renderToTree(ctx context.Context) (*tmpl.Tree, error) {
 		CSRFToken: s.csrfToken,
 		Uploads:   s.uploadConfigs,
 	}
-	t, dot := s.view.Render(ctx, meta)
+	dot, t := s.view.Render(ctx, meta)
 
 	tree, err := t.ExecuteTree(dot)
 	// add title part to tree if it is set

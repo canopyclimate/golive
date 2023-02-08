@@ -53,10 +53,9 @@ func main() {
 
 	liveConfig := live.Config{
 		Mux: lr,
-		RenderLayout: func(w http.ResponseWriter, r *http.Request, lvd *live.LayoutDot) (*htmltmpl.Template, any) {
+		RenderLayout: func(w http.ResponseWriter, r *http.Request, lvd *live.LayoutDot) (any, *htmltmpl.Template) {
 			lvd.PageTitle.Prefix = "GoLive - "
-			t := loadTemplate("./examples/layout.gohtml", myFuncs)
-			return t, lvd
+			return lvd, loadTemplate("./examples/layout.gohtml", myFuncs)
 		},
 	}
 	// setup static route
@@ -193,8 +192,8 @@ func (c *Counter) HandleEvent(ctx context.Context, e *live.Event) error {
 	return nil
 }
 
-func (c *Counter) Render(ctx context.Context, meta *live.Meta) (*htmltmpl.Template, any) {
-	return htmltmpl.Must(htmltmpl.New("liveView").Funcs(myFuncs).Parse(`
+func (c *Counter) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl.Template) {
+	return c, htmltmpl.Must(htmltmpl.New("liveView").Funcs(myFuncs).Parse(`
 			<div>
 				Go to Nav: {{ liveNav "navigate" "/nav" (dict "" "") "Nav" }}
 				<h1>Count is: {{ .Count }}</h1>
@@ -218,7 +217,7 @@ func (c *Counter) Render(ctx context.Context, meta *live.Meta) (*htmltmpl.Templa
 			<div>
 			  Counter that updates every second: {{ .Ticks }}
 			</div>
-		`)), c
+		`))
 }
 
 func (c *Counter) Close() error {
@@ -252,8 +251,8 @@ func (n *Nav) HandleParams(ctx context.Context, url *url.URL) error {
 	return nil
 }
 
-func (n *Nav) Render(ctx context.Context, meta *live.Meta) (*htmltmpl.Template, any) {
-	return loadTemplate("./examples/nav.gohtml", myFuncs), n
+func (n *Nav) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl.Template) {
+	return n, loadTemplate("./examples/nav.gohtml", myFuncs)
 }
 
 func (n *Nav) PageTitleConfig() live.PageTitleConfig {
@@ -289,8 +288,8 @@ func (v *MoreEvents) HandleEvent(ctx context.Context, e *live.Event) error {
 	return nil
 }
 
-func (v *MoreEvents) Render(ctx context.Context, meta *live.Meta) (*htmltmpl.Template, any) {
-	return htmltmpl.Must(htmltmpl.New("liveView").Funcs(myFuncs).Parse(`
+func (v *MoreEvents) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl.Template) {
+	return v, htmltmpl.Must(htmltmpl.New("liveView").Funcs(myFuncs).Parse(`
 			<div>
 				<div>
 					<h2>Volume: {{ .Volume}}</h2>
@@ -311,7 +310,7 @@ func (v *MoreEvents) Render(ctx context.Context, meta *live.Meta) (*htmltmpl.Tem
 					Input is {{ if not .Focused}}not{{end}} focused
 				</div>
 			</div>
-		`)), v
+		`))
 }
 
 type Photo struct {
@@ -340,16 +339,16 @@ func (lv *MyPhotos) Mount(ctx context.Context, p live.Params) error {
 	return nil
 }
 
-func (lv *MyPhotos) Render(ctx context.Context, meta *live.Meta) (*htmltmpl.Template, any) {
+func (lv *MyPhotos) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl.Template) {
 	type myPhotos struct {
 		*MyPhotos
-		Meta *live.Meta
+		UploadPhotos *live.UploadConfig
 	}
 	dot := myPhotos{
-		MyPhotos: lv,
-		Meta:     meta,
+		MyPhotos:     lv,
+		UploadPhotos: meta.Uploads[uploadName],
 	}
-	return loadTemplate("./examples/photos.gohtml", myFuncs), dot
+	return dot, loadTemplate("./examples/photos.gohtml", myFuncs)
 }
 
 func (lv *MyPhotos) HandleEvent(ctx context.Context, e *live.Event) error {
@@ -437,6 +436,6 @@ func (m *ModalDemo) Mount(ctx context.Context, p live.Params) error {
 	return nil
 }
 
-func (m *ModalDemo) Render(ctx context.Context, meta *live.Meta) (*htmltmpl.Template, any) {
-	return loadTemplate("./examples/modal.gohtml", myFuncs), m
+func (m *ModalDemo) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl.Template) {
+	return m, loadTemplate("./examples/modal.gohtml", myFuncs)
 }
