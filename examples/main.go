@@ -411,11 +411,16 @@ type ModalDemo struct {
 	Text string
 }
 
-func (m *ModalDemo) ShowModal() *live.JS {
-	js := &live.JS{}
-	js.Show(&live.ShowOpts{To: "#modal"})
-	js.Show(&live.ShowOpts{To: "#modal-content"})
-	return js
+func (m *ModalDemo) JS() *live.JS {
+	return &live.JS{}
+}
+
+func (m *ModalDemo) ShowModal(tos ...string) *live.JS {
+	var js live.JS
+	for _, to := range tos {
+		js.Show(&live.ShowOpts{To: to})
+	}
+	return &js
 }
 
 func (m *ModalDemo) HideModal() *live.JS {

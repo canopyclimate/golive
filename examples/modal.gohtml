@@ -1,5 +1,5 @@
 {{/* The following is taken directly from the LiveView.JS docs: https://hexdocs.pm/phoenix_live_view/Phoenix.LiveView.JS.html */}}
-<button type="button" phx-click="{{ .ShowModal }}">Show modal</button>
+<button type="button" phx-click="{{ .ShowModal "#modal" "#modal-content" }}">Show modal</button>
 <div id="modal" class="phx-modal" phx-remove="{{ .HideModal }}" style="display: none;">
   <div
     id="modal-content"
