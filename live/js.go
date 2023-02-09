@@ -9,49 +9,62 @@ import (
 // DefaultTransitionDuration_ms is the default duration, in milliseconds, of live.JS transitions.
 const DefaultTransitionDuration = 200 * time.Millisecond
 
-type op struct {
+type cmd struct {
 	kind string
-	args map[string]any
+	args any
 }
 
 // JS provides a way to precompose simple client-side DOM changes that don't require a round-trip to the server.
 // Create a JS struct, call its methods to build up a command, and then render it as the value of a phx-* attribute.
 type JS struct {
-	ops []*op
+	cmds []*cmd
 }
 
 // Hide hides elements.
-// When the action is triggered on the client, phx:hide-start is dispatched to the hidden elements. After the time specified by opts.Time, phx:hide-end is dispatched.
-func (js *JS) Hide(opts *HideOpts) {
+// When the action is triggered on the client, phx:hide-start is dispatched to the hidden elements. After the time specified by :time, phx:hide-end is dispatched.
+func (js *JS) Hide(opts *HideOpts) *JS {
 	js.add("hide", opts)
+	return js
 }
 
 // Show shows elements.
-// When the action is triggered on the client, phx:show-start is dispatched to the shown elements. After the time specified by opts.Time, phx:show-end is dispatched.
-func (js *JS) Show(opts *ShowOpts) {
+// When the action is triggered on the client, phx:show-start is dispatched to the shown elements. After the time specified by :time, phx:show-end is dispatched.
+func (js *JS) Show(opts *ShowOpts) *JS {
 	js.add("show", opts)
+	return js
 }
 
 // Toggle toggles element visibility.
 // When the toggle is complete on the client, a phx:show-start or phx:hide-start, and phx:show-end or phx:hide-end event will be dispatched to the toggled elements.
-func (js *JS) Toggle(opts *ToggleOpts) {
+func (js *JS) Toggle(opts *ToggleOpts) *JS {
 	js.add("toggle", opts)
+	return js
 }
 
-type hasArgs interface {
-	args() map[string]any
+// Push pushes an event to the server.
+func (js *JS) Push(event string, opts *PushOpts) *JS {
+	type pushOpts struct {
+		Event string `json:"event"`
+		PushOpts
+	}
+	pos := &pushOpts{
+		Event:    event,
+		PushOpts: *opts,
+	}
+	js.add("push", pos)
+	return js
 }
 
-func (js *JS) add(kind string, a hasArgs) {
-	js.ops = append(js.ops, &op{
+func (js *JS) add(kind string, options any) {
+	js.cmds = append(js.cmds, &cmd{
 		kind: kind,
-		args: a.args(),
+		args: options,
 	})
 }
 
 func (js *JS) MarshalJSON() ([]byte, error) {
 	var o [][]any
-	for _, op := range js.ops {
+	for _, op := range js.cmds {
 		o = append(o, []any{
 			op.kind,
 			op.args,
@@ -61,7 +74,10 @@ func (js *JS) MarshalJSON() ([]byte, error) {
 }
 
 func (js *JS) String() string {
-	s, _ := js.MarshalJSON()
+	s, err := js.MarshalJSON()
+	if err != nil {
+		panic(err)
+	}
 	return string(s)
 }
 
@@ -75,6 +91,30 @@ type Transition struct {
 	EndClass string
 }
 
+func (t Transition) MarshalJSON() ([]byte, error) {
+	tc, sc, ec := []byte(`[]`), []byte(`[]`), []byte(`[]`)
+	var err error
+	if t.TransitionClass != "" {
+		tc, err = json.Marshal(strings.Split(t.TransitionClass, " "))
+		if err != nil {
+			return nil, err
+		}
+	}
+	if t.StartClass != "" {
+		sc, err = json.Marshal(strings.Split(t.StartClass, " "))
+		if err != nil {
+			return nil, err
+		}
+	}
+	if t.EndClass != "" {
+		ec, err = json.Marshal(strings.Split(t.EndClass, " "))
+		if err != nil {
+			return nil, err
+		}
+	}
+	return json.Marshal([3]json.RawMessage{tc, sc, ec})
+}
+
 type HideOpts struct {
 	// To is the DOM selector of the element to hide, or empty to target the interacted element.
 	To string
@@ -84,22 +124,25 @@ type HideOpts struct {
 	Time time.Duration
 }
 
-func (o *HideOpts) args() map[string]any {
-	var to *string
-	time := DefaultTransitionDuration
-	var transition *Transition
-	if o != nil {
-		to = &o.To
-		if o.Time != 0 {
-			time = o.Time
-		}
-		transition = o.Transition
+func (o *HideOpts) MarshalJSON() ([]byte, error) {
+	type hideOpts struct {
+		To         *string    `json:"to"`
+		Transition Transition `json:"transition"`
+		Time       int64      `json:"time"`
 	}
-	return map[string]any{
-		"time":       time.Milliseconds(),
-		"to":         to,
-		"transition": transition.phx(),
+	ho := &hideOpts{
+		Time: DefaultTransitionDuration.Milliseconds(),
 	}
+	if o.To != "" {
+		ho.To = &o.To
+	}
+	if o.Transition != nil {
+		ho.Transition = *o.Transition
+	}
+	if o.Time != 0 {
+		ho.Time = o.Time.Milliseconds()
+	}
+	return json.Marshal(ho)
 }
 
 type ShowOpts struct {
@@ -113,27 +156,30 @@ type ShowOpts struct {
 	Display string
 }
 
-func (o *ShowOpts) args() map[string]any {
-	var to *string
-	time := DefaultTransitionDuration
-	var transition *Transition
-	display := "block"
-	if o != nil {
-		to = &o.To
-		if o.Time != 0 {
-			time = o.Time
-		}
-		transition = o.Transition
-		if o.Display != "" {
-			display = o.Display
-		}
+func (o *ShowOpts) MarshalJSON() ([]byte, error) {
+	type showOpts struct {
+		To         *string    `json:"to"`
+		Transition Transition `json:"transition"`
+		Time       int64      `json:"time"`
+		Display    string     `json:"display"`
 	}
-	return map[string]any{
-		"time":       time.Milliseconds(),
-		"to":         to,
-		"transition": transition.phx(),
-		"display":    display,
+	so := &showOpts{
+		Display: "block",
+		Time:    DefaultTransitionDuration.Milliseconds(),
 	}
+	if o.To != "" {
+		so.To = &o.To
+	}
+	if o.Transition != nil {
+		so.Transition = *o.Transition
+	}
+	if o.Time != 0 {
+		so.Time = o.Time.Milliseconds()
+	}
+	if o.Display != "" {
+		so.Display = o.Display
+	}
+	return json.Marshal(so)
 }
 
 type ToggleOpts struct {
@@ -149,45 +195,44 @@ type ToggleOpts struct {
 	Display string
 }
 
-func (o *ToggleOpts) args() map[string]any {
-	var to *string
-	time := DefaultTransitionDuration
-	var in, out *Transition
-	display := "block"
-	if o != nil {
-		to = &o.To
-		if o.Time != 0 {
-			time = o.Time
-		}
-		in = o.In
-		out = o.Out
-		if o.Display != "" {
-			display = o.Display
-		}
+func (o *ToggleOpts) MarshalJSON() ([]byte, error) {
+	type toggleOpts struct {
+		To      *string    `json:"to"`
+		In      Transition `json:"ins"`
+		Out     Transition `json:"outs"`
+		Time    int64      `json:"time"`
+		Display string     `json:"display"`
 	}
-	return map[string]any{
-		"time":    time.Milliseconds(),
-		"to":      to,
-		"ins":     in.phx(),
-		"outs":    out.phx(),
-		"display": display,
+	to := &toggleOpts{
+		Display: "block",
+		Time:    DefaultTransitionDuration.Milliseconds(),
 	}
+	if o.To != "" {
+		to.To = &o.To
+	}
+	if o.In != nil {
+		to.In = *o.In
+	}
+	if o.Out != nil {
+		to.Out = *o.Out
+	}
+	if o.Time != 0 {
+		to.Time = o.Time.Milliseconds()
+	}
+	if o.Display != "" {
+		to.Display = o.Display
+	}
+	return json.Marshal(to)
 }
 
-func phxClasses(class string) []string {
-	if class == "" {
-		return []string{}
-	}
-	return strings.Split(class, " ")
-}
-
-func (t *Transition) phx() [3][]string {
-	if t == nil {
-		return [3][]string{{}, {}, {}}
-	}
-	return [3][]string{
-		phxClasses(t.TransitionClass),
-		phxClasses(t.StartClass),
-		phxClasses(t.EndClass),
-	}
+type PushOpts struct {
+	// Target is the selector or component ID to push to
+	Target string `json:"target,omitempty"`
+	// Loading is the selector to apply the phx loading classes to
+	Loading string `json:"loading,omitempty"`
+	// PageLoading is a boolean indicating whether to trigger the "phx:page-loading-start"
+	// and "phx:page-loading-stop" events. Defaults to `false`
+	PageLoading bool `json:"page_loading,omitempty"`
+	// Value is optional data to include in the event's `value` property
+	Value any `json:"value,omitempty"`
 }
