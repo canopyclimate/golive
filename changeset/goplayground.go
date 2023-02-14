@@ -9,7 +9,7 @@ import (
 	"github.com/go-playground/form"
 	"github.com/go-playground/locales/en"
 	ut "github.com/go-playground/universal-translator"
-	"github.com/go-playground/validator"
+	"github.com/go-playground/validator/v10"
 )
 
 // GoPlaygroundChangesetConfig provides a GoPlayground Validate and Decoder
