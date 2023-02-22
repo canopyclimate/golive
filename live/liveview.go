@@ -24,6 +24,10 @@ import (
 type Config struct {
 	// Mux is a http.Handler that routes requests to Views.
 	Mux http.Handler
+	// ShouldHandleRequest indicates whether this Config should handle r.
+	// If nil, it is assumed to return true.
+	// This can be helpful when live views co-exist with non-live views.
+	ShouldHandleRequest func(r *http.Request) bool
 	// RenderLayout is a func that provides a way to render your base layout HTML for all LiveViews.
 	// You are provides with the http.ResponseWriter, *http.Request, and a *LayoutDot and are responsible for
 	// providing the "dot" and the template that will be executed on the initial HTML render.
@@ -58,6 +62,11 @@ func (c *Config) viewForRequest(w http.ResponseWriter, r *http.Request, currentV
 
 func (c *Config) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if c.ShouldHandleRequest != nil && !c.ShouldHandleRequest(r) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		// Get the LiveView if one is routable.
 		lv, code, r := c.viewForRequest(w, r, nil)
 
