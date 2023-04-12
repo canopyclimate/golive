@@ -167,7 +167,7 @@ func (t *Tree) WriteTo(w io.Writer) (written int64, err error) {
 		}
 		return written, err
 	} else if len(t.Statics) < len(t.Dynamics)+1 {
-		// len(Dynaics) should be exactly 1 less than len(Statics)
+		// len(Dynamics) should be exactly 1 less than len(Statics)
 		// because we zip them together. If not, we need to add empty
 		// strings to the statics until that is true.
 		// Note - the likely cause of this is a template or dynamic part of
