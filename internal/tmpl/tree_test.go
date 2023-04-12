@@ -7,6 +7,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
+	"github.com/canopyclimate/golive/htmltmpl"
 	"github.com/canopyclimate/golive/internal/tmpl"
 )
 
@@ -25,7 +26,28 @@ func TestBasicSerialization(t *testing.T) {
 	if n != int64(buf.Len()) {
 		t.Fatalf("wrote %d but tracked %d", buf.Len(), n)
 	}
-	const want = `{"0":"abc","1":"xyz","s":["def"]}`
+	const want = `{"0":"abc","1":"xyz","s":["def","",""]}`
+	got := buf.String()
+	if want != got {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestOneDynamicWithEmptyStaticResultsInString(t *testing.T) {
+	x, err := htmltmpl.New("x").Parse("{{ if .X }}{{.X}}{{ end }}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lt, err := x.ExecuteTree(map[string]any{"X": "foo"})
+	buf := new(bytes.Buffer)
+	n, err := lt.WriteTo(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != int64(buf.Len()) {
+		t.Fatalf("wrote %d but tracked %d", buf.Len(), n)
+	}
+	const want = `{"0":{"0":"foo","s":["",""]},"s":["",""]}`
 	got := buf.String()
 	if want != got {
 		t.Fatalf("got %q want %q", got, want)
@@ -46,7 +68,7 @@ func TestEmptyRangeSerialization(t *testing.T) {
 	if n != int64(buf.Len()) {
 		t.Fatalf("wrote %d but tracked %d", buf.Len(), n)
 	}
-	const want = `{"0":"abc","1":"","s":["def"]}`
+	const want = `{"0":"abc","1":"","s":["def","",""]}`
 	got := buf.String()
 	if want != got {
 		t.Fatalf("got %q want %q", got, want)
@@ -79,7 +101,7 @@ func TestNonEmptyRangeSerialization(t *testing.T) {
 	if n != int64(buf.Len()) {
 		t.Fatalf("wrote %d but tracked %d", buf.Len(), n)
 	}
-	const want = `{"0":"abc","1":{"d":[["1"],["2"],["3"]],"s":["x is ","."]},"s":["def"]}`
+	const want = `{"0":"abc","1":{"d":[["1"],["2"],["3"]],"s":["x is ",".","",""]},"s":["def","",""]}`
 	got := buf.String()
 	if want != got {
 		t.Fatalf("got \n%q want \n%q", got, want)
