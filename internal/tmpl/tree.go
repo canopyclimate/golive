@@ -166,11 +166,18 @@ func (t *Tree) WriteTo(w io.Writer) (written int64, err error) {
 			err = writeJSONString(t.Statics[0])
 		}
 		return written, err
-	} else if len(t.Dynamics) > len(t.Statics)+1 {
-		// len(Dynaics) should be len(Statics) + 1
-		// if they are equal (but not zero) then we add a single
-		// empty string to the end of the statics to make up the difference
-		t.Statics = append(t.Statics, "")
+	} else if len(t.Statics) < len(t.Dynamics)+1 {
+		// len(Dynaics) should be exactly 1 less than len(Statics)
+		// because we zip them together. If not, we need to add empty
+		// strings to the statics until that is true.
+		// Note - the likely cause of this is a template or dynamic part of
+		// a template starts and/or ends with an empty string.  These empty
+		// strings are not included in the statics array, but are necessary
+		// to zip the statics and dynamics together correctly when the tree is
+		// passed to the client.
+		for len(t.Statics) < len(t.Dynamics)+1 {
+			t.Statics = append(t.Statics, "")
+		}
 	}
 
 	if err := writeByte('{'); err != nil {
