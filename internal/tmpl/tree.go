@@ -7,7 +7,6 @@ import (
 	"io"
 	"reflect"
 	"strconv"
-	"strings"
 
 	"github.com/canopyclimate/golive/internal/json"
 )
@@ -27,20 +26,6 @@ type Tree struct {
 	Title          string
 	isRange        bool
 	rangeStep      int
-}
-
-func (t *Tree) String() string {
-	var buf strings.Builder
-	for i, s := range t.Statics {
-		buf.WriteString(fmt.Sprintf("\nStatic %d: %q", i, s))
-	}
-	for i, d := range t.Dynamics {
-		buf.WriteString(fmt.Sprintf("\nDynamic %d: %q", i, d))
-	}
-	buf.WriteString(fmt.Sprintf("\nExcludeStatics: %t", t.ExcludeStatics))
-	buf.WriteString(fmt.Sprintf("\nTitle: %q", t.Title))
-	buf.WriteString(fmt.Sprintf("\nisRange: %t", t.isRange))
-	return buf.String()
 }
 
 func (t *Tree) AppendStatic(text string) {
