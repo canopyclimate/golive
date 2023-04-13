@@ -9,6 +9,7 @@ import (
 
 	"github.com/canopyclimate/golive/htmltmpl"
 	"github.com/canopyclimate/golive/internal/tmpl"
+	"github.com/josharian/tstruct"
 )
 
 func TestBasicSerialization(t *testing.T) {
@@ -26,7 +27,7 @@ func TestBasicSerialization(t *testing.T) {
 	if n != int64(buf.Len()) {
 		t.Fatalf("wrote %d but tracked %d", buf.Len(), n)
 	}
-	const want = `{"0":"abc","1":"xyz","s":["def","",""]}`
+	const want = `{"0":"abc","1":"xyz","s":["","def",""]}`
 	got := buf.String()
 	if want != got {
 		t.Fatalf("got %q want %q", got, want)
@@ -54,6 +55,64 @@ func TestOneDynamicWithEmptyStaticResultsInString(t *testing.T) {
 	}
 }
 
+func TestVariableDynamic(t *testing.T) {
+	x, err := htmltmpl.New("x").Parse(
+		`{{ $foo := "foo" }}
+	{{ $foo }}
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lt, err := x.ExecuteTree(map[string]any{})
+	buf := new(bytes.Buffer)
+	n, err := lt.WriteTo(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != int64(buf.Len()) {
+		t.Fatalf("wrote %d but tracked %d", buf.Len(), n)
+	}
+	const want = `{"0":"","1":"foo","s":["","\n\t","\n\t"]}`
+	got := buf.String()
+	if want != got {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestTStructInTemplate(t *testing.T) {
+	type TestTStruct struct {
+		Attr string
+	}
+	funcs := htmltmpl.FuncMap{}
+	err := tstruct.AddFuncMap[TestTStruct](funcs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	x, err := htmltmpl.New("x").Funcs(funcs).Parse(`
+	{{ define "test_template" }}
+		Attr is: {{ .Attr }}
+	{{ end }}{{/*comment*/}}
+	{{ template "test_template" TestTStruct (Attr "foo") }}
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lt, err := x.ExecuteTree(map[string]any{})
+	buf := new(bytes.Buffer)
+	n, err := lt.WriteTo(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != int64(buf.Len()) {
+		t.Fatalf("wrote %d but tracked %d", buf.Len(), n)
+	}
+	const want = `{"0":{"0":"foo","s":["\n\t\tAttr is: ","\n\t"]},"s":["\n\t\n\t","\n\t"]}`
+	got := buf.String()
+	if want != got {
+		t.Fatalf("got \n%q want \n%q", got, want)
+	}
+}
+
 func TestEmptyRangeSerialization(t *testing.T) {
 	root := new(tmpl.Tree)
 	tree := root
@@ -68,7 +127,7 @@ func TestEmptyRangeSerialization(t *testing.T) {
 	if n != int64(buf.Len()) {
 		t.Fatalf("wrote %d but tracked %d", buf.Len(), n)
 	}
-	const want = `{"0":"abc","1":"","s":["def","",""]}`
+	const want = `{"0":"abc","1":"","s":["","def",""]}`
 	got := buf.String()
 	if want != got {
 		t.Fatalf("got %q want %q", got, want)
@@ -101,7 +160,29 @@ func TestNonEmptyRangeSerialization(t *testing.T) {
 	if n != int64(buf.Len()) {
 		t.Fatalf("wrote %d but tracked %d", buf.Len(), n)
 	}
-	const want = `{"0":"abc","1":{"d":[["1"],["2"],["3"]],"s":["x is ",".","",""]},"s":["def","",""]}`
+	const want = `{"0":"abc","1":{"d":[["1"],["2"],["3"]],"s":["x is ","."]},"s":["","def",""]}`
+	got := buf.String()
+	if want != got {
+		t.Fatalf("got \n%q want \n%q", got, want)
+	}
+}
+
+func TestRangeTemplateSerialization(t *testing.T) {
+	x, err := htmltmpl.New("x").Parse(
+		`{{ range $i, $v := .X }}{{ $i }}:{{ $v }}s{{/*comment*/}}t{{ end}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lt, err := x.ExecuteTree(map[string][]string{"X": {"foo", "bar"}})
+	buf := new(bytes.Buffer)
+	n, err := lt.WriteTo(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != int64(buf.Len()) {
+		t.Fatalf("wrote %d but tracked %d", buf.Len(), n)
+	}
+	const want = `{"0":{"d":[["0","foo"],["1","bar"]],"s":["",":","st"]},"s":["",""]}`
 	got := buf.String()
 	if want != got {
 		t.Fatalf("got \n%q want \n%q", got, want)

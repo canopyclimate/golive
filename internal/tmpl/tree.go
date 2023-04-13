@@ -7,6 +7,7 @@ import (
 	"io"
 	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/canopyclimate/golive/internal/json"
 )
@@ -28,6 +29,20 @@ type Tree struct {
 	rangeStep      int
 }
 
+func (t *Tree) String() string {
+	var buf strings.Builder
+	for i, s := range t.Statics {
+		buf.WriteString(fmt.Sprintf("\nStatic %d: %q", i, s))
+	}
+	for i, d := range t.Dynamics {
+		buf.WriteString(fmt.Sprintf("\nDynamic %d: %q", i, d))
+	}
+	buf.WriteString(fmt.Sprintf("\nExcludeStatics: %t", t.ExcludeStatics))
+	buf.WriteString(fmt.Sprintf("\nTitle: %q", t.Title))
+	buf.WriteString(fmt.Sprintf("\nisRange: %t", t.isRange))
+	return buf.String()
+}
+
 func (t *Tree) AppendStatic(text string) {
 	// only add first set of statics inside a range
 	if t.rangeStep > 0 {
@@ -35,14 +50,47 @@ func (t *Tree) AppendStatic(text string) {
 	}
 	// When a comment is present, it causes two consecutive statics.
 	// Concatenate those statics to preserve the alternating statics/dynamics invariant.
-	if len(t.Statics) > len(t.Dynamics) {
-		t.Statics[len(t.Statics)-1] += text
+	if !t.isRange {
+		if len(t.Statics) > len(t.Dynamics) {
+			t.Statics[len(t.Statics)-1] += text
+			return
+		}
+		t.Statics = append(t.Statics, text)
 		return
+	}
+
+	// handle ranges
+	if len(t.Dynamics) > 0 {
+		switch rangeDyn := t.Dynamics[t.rangeStep].(type) {
+		// range of ranges
+		case []any:
+			if len(t.Statics) > len(rangeDyn) {
+				t.Statics[len(t.Statics)-1] += text
+				return
+			}
+		// range of subtrees
+		case *Tree:
+			if len(t.Statics) > len(t.Dynamics) {
+				t.Statics[len(t.Statics)-1] += text
+				return
+			}
+			t.Statics = append(t.Statics, text)
+			return
+		}
 	}
 	t.Statics = append(t.Statics, text)
 }
 
 func (t *Tree) AppendDynamic(d string) {
+	// if we are adding a dynamic and there are no statics then it is
+	// probably (I can't think of another reason) the case that
+	// the template starts with a dynamic (e.g. "{{...}}..." )
+	// in this case we need to add an empty static to the tree because
+	// the template processor skips the first (empty) string
+	if len(t.Statics) == 0 {
+		t.Statics = append(t.Statics, "")
+	}
+
 	if !t.isRange {
 		t.Dynamics = append(t.Dynamics, d)
 		return
@@ -61,6 +109,14 @@ func (t *Tree) AppendDynamic(d string) {
 }
 
 func (t *Tree) AppendSub() *Tree {
+	// if we are adding a dynamic and there are no statics then it is
+	// probably (I can't think of another reason) the case that
+	// the template starts with a dynamic (e.g. "{{...}}..." )
+	// in this case we need to add an empty static to the tree because
+	// the template processor skips the first (empty) string
+	if len(t.Statics) == 0 {
+		t.Statics = append(t.Statics, "")
+	}
 	sub := new(Tree)
 	t.Dynamics = append(t.Dynamics, sub)
 	return sub
@@ -166,8 +222,8 @@ func (t *Tree) WriteTo(w io.Writer) (written int64, err error) {
 			err = writeJSONString(t.Statics[0])
 		}
 		return written, err
-	} else if len(t.Statics) < len(t.Dynamics)+1 {
-		// len(Dynamics) should be exactly 1 less than len(Statics)
+	} else if !t.isRange && len(t.Statics) < len(t.Dynamics)+1 {
+		// In the case of non-range trees, len(Dynamics) should be exactly 1 less than len(Statics)
 		// because we zip them together. If not, we need to add empty
 		// strings to the statics until that is true.
 		// Note - the likely cause of this is a template or dynamic part of
@@ -177,6 +233,15 @@ func (t *Tree) WriteTo(w io.Writer) (written int64, err error) {
 		// passed to the client.
 		for len(t.Statics) < len(t.Dynamics)+1 {
 			t.Statics = append(t.Statics, "")
+		}
+	} else if t.isRange && len(t.Dynamics) > 0 {
+		switch t.Dynamics[0].(type) {
+		case []any:
+			if len(t.Statics) < len(t.Dynamics[0].([]any))+1 {
+				for len(t.Statics) < len(t.Dynamics[0].([]any))+1 {
+					t.Statics = append(t.Statics, "")
+				}
+			}
 		}
 	}
 
@@ -263,8 +328,14 @@ func (t *Tree) WriteTo(w io.Writer) (written int64, err error) {
 						panic(fmt.Sprintf("unexpected type of Dynamic inside []any: %s, type:%q. Should be string or *Tree.", dd, reflect.TypeOf(dd)))
 					}
 				}
+			case *Tree:
+				n, err := d.WriteTo(w)
+				written += n
+				if err != nil {
+					return written, err
+				}
 			default:
-				panic(fmt.Sprintf("unexpected type of Dynamic: %s, type:%q.  Should be []any.", d, reflect.TypeOf(d)))
+				panic(fmt.Sprintf("unexpected type of Dynamic: %s\n, type:%q.  Should be []any.", d, reflect.TypeOf(d)))
 			}
 			if err := writeByte(']'); err != nil {
 				return written, err
