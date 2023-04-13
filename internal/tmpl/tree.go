@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"reflect"
 	"strconv"
 
 	"github.com/canopyclimate/golive/internal/json"
@@ -290,7 +289,7 @@ func (t *Tree) WriteTo(w io.Writer) (written int64, err error) {
 							return written, err
 						}
 					default:
-						panic(fmt.Sprintf("unexpected type of Dynamic inside []any: %s, type:%q. Should be string or *Tree.", dd, reflect.TypeOf(dd)))
+						panic(fmt.Sprintf("unexpected type of Dynamic inside []any: %T, want string or *Tree, value is: %v", dd, dd))
 					}
 				}
 			case *Tree:
@@ -300,7 +299,7 @@ func (t *Tree) WriteTo(w io.Writer) (written int64, err error) {
 					return written, err
 				}
 			default:
-				panic(fmt.Sprintf("unexpected type of Dynamic: %s\n, type:%q.  Should be []any.", d, reflect.TypeOf(d)))
+				panic(fmt.Sprintf("unexpected type of Dynamic: %T, want string or *Tree, value is: %v", d, d))
 			}
 			if err := writeByte(']'); err != nil {
 				return written, err
