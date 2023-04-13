@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 
 	"github.com/canopyclimate/golive/internal/json"
 )
@@ -27,6 +28,20 @@ type Tree struct {
 	rangeStep      int
 }
 
+func (t *Tree) String() string {
+	var buf strings.Builder
+	for i, s := range t.Statics {
+		buf.WriteString(fmt.Sprintf("\nStatic %d: %q", i, s))
+	}
+	for i, d := range t.Dynamics {
+		buf.WriteString(fmt.Sprintf("\nDynamic %d: %q", i, d))
+	}
+	buf.WriteString(fmt.Sprintf("\nExcludeStatics: %t", t.ExcludeStatics))
+	buf.WriteString(fmt.Sprintf("\nTitle: %q", t.Title))
+	buf.WriteString(fmt.Sprintf("\nisRange: %t", t.isRange))
+	return buf.String()
+}
+
 func (t *Tree) AppendStatic(text string) {
 	// only add first set of statics inside a range
 	if t.rangeStep > 0 {
@@ -34,16 +49,33 @@ func (t *Tree) AppendStatic(text string) {
 	}
 	// When a comment is present, it causes two consecutive statics.
 	// Concatenate those statics to preserve the alternating statics/dynamics invariant.
-	n := len(t.Dynamics)
-	if t.isRange && n > 0 {
-		if ranges, ok := t.Dynamics[t.rangeStep].([]any); ok {
-			// range of ranges, not range of trees
-			n = len(ranges)
+	if !t.isRange {
+		if len(t.Statics) > len(t.Dynamics) {
+			t.Statics[len(t.Statics)-1] += text
+			return
 		}
-	}
-	if len(t.Statics) > n {
-		t.Statics[len(t.Statics)-1] += text
+		t.Statics = append(t.Statics, text)
 		return
+	}
+
+	// handle ranges
+	if len(t.Dynamics) > 0 {
+		switch rangeDyn := t.Dynamics[t.rangeStep].(type) {
+		// range of ranges
+		case []any:
+			if len(t.Statics) > len(rangeDyn) {
+				t.Statics[len(t.Statics)-1] += text
+				return
+			}
+		// range of subtrees
+		case *Tree:
+			if len(t.Statics) > len(t.Dynamics) {
+				t.Statics[len(t.Statics)-1] += text
+				return
+			}
+			t.Statics = append(t.Statics, text)
+			return
+		}
 	}
 	t.Statics = append(t.Statics, text)
 }
@@ -189,7 +221,7 @@ func (t *Tree) WriteTo(w io.Writer) (written int64, err error) {
 			err = writeJSONString(t.Statics[0])
 		}
 		return written, err
-	} else {
+	} else if !t.isRange && len(t.Statics) < len(t.Dynamics)+1 {
 		// In the case of non-range trees, len(Dynamics) should be exactly 1 less than len(Statics)
 		// because we zip them together. If not, we need to add empty
 		// strings to the statics until that is true.
@@ -206,6 +238,15 @@ func (t *Tree) WriteTo(w io.Writer) (written int64, err error) {
 		}
 		for len(t.Statics) < n+1 {
 			t.Statics = append(t.Statics, "")
+		}
+	} else if t.isRange && len(t.Dynamics) > 0 {
+		switch t.Dynamics[0].(type) {
+		case []any:
+			if len(t.Statics) < len(t.Dynamics[0].([]any))+1 {
+				for len(t.Statics) < len(t.Dynamics[0].([]any))+1 {
+					t.Statics = append(t.Statics, "")
+				}
+			}
 		}
 	}
 
