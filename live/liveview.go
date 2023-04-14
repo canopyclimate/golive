@@ -232,6 +232,7 @@ func (x *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		msg:           make(chan *phx.Msg),       // TODO: buffered?
 		info:          make(chan *Info),          // TODO: buffered?
 		upload:        make(chan *phx.UploadMsg), // TODO: buffered?
+		nav:           make(chan *phx.Nav),       // TODO: buffered?
 		uploadConfigs: make(map[string]*UploadConfig),
 	}
 	go s.read()
@@ -281,6 +282,9 @@ func (s *socket) serve(ctx context.Context) {
 			res = append(res, r)
 		case um := <-s.upload:
 			res, err = s.handleUpload(ctx, um)
+		case nm := <-s.nav:
+			r, err = nm.JSON()
+			res = append(res, r)
 		case err := <-s.readerr:
 			// TODO: what?
 			fmt.Printf("websocket read failed: %v\n", err)
@@ -311,6 +315,7 @@ type socket struct {
 	msg               chan *phx.Msg
 	info              chan *Info
 	upload            chan *phx.UploadMsg
+	nav               chan *phx.Nav
 	readerr           chan error
 	title             string
 	url               url.URL
@@ -776,6 +781,47 @@ func PageTitle(ctx context.Context, newTitle string) {
 		return
 	}
 	s.title = newTitle
+}
+
+type LiveNavType string
+
+const (
+	NavPatch    LiveNavType = "live_patch"
+	NavRedirect LiveNavType = "live_redirect"
+)
+
+// PushNav supports push patching and push redirecting from server to View
+func PushNav(ctx context.Context, typ LiveNavType, path string, params url.Values, replaceHistory bool) {
+	s := socketValue(ctx)
+	if s == nil {
+		return
+	}
+	// build new URL from existing URL and new path and params
+	url := url.URL{Path: path, RawQuery: params.Encode()}
+	to := s.url.ResolveReference(&url)
+
+	kind := "push"
+	if replaceHistory {
+		kind = "replace"
+	}
+
+	// call HandleParams if view implements ParamsHandler
+	hp, ok := s.view.(ParamsHandler)
+	if ok {
+		err := hp.HandleParams(ctx, to)
+		if err != nil {
+			// TODO better error handling
+			log.Println(err)
+			return
+		}
+	}
+
+	// send nav event to view
+	p := phx.NavPayload{Kind: kind, To: to.String()}
+	nm := phx.NewNav(s.id, string(typ), p)
+
+	// don't block waiting for nav channel to be read
+	go func() { s.nav <- nm }()
 }
 
 type socketContextKey struct{}

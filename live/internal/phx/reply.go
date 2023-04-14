@@ -30,6 +30,19 @@ type Diff struct {
 	Payload json.RawMessage
 }
 
+type NavPayload struct {
+	To   string `json:"to"`
+	Kind string `json:"kind"`
+}
+
+type Nav struct {
+	JoinRef *string // nullable
+	MsgRef  *string // nullable
+	Topic   string
+	Event   string
+	Payload NavPayload
+}
+
 type Heartbeat struct {
 	Reply
 	Payload
@@ -126,6 +139,14 @@ func NewHeartbeat(msgRef string) *Reply {
 	}
 }
 
+func NewNav(topic, event string, p NavPayload) *Nav {
+	return &Nav{
+		Topic:   topic,
+		Event:   event,
+		Payload: p,
+	}
+}
+
 func (m *Reply) JSON() ([]byte, error) {
 	return json.Marshal(m)
 }
@@ -140,4 +161,12 @@ func (d *Diff) JSON() ([]byte, error) {
 
 func (d *Diff) MarshalJSON() ([]byte, error) {
 	return json.Marshal([]any{d.JoinRef, d.MsgRef, d.Topic, d.Event, d.Payload})
+}
+
+func (n *Nav) JSON() ([]byte, error) {
+	return json.Marshal(n)
+}
+
+func (n *Nav) MarshalJSON() ([]byte, error) {
+	return json.Marshal([]any{n.JoinRef, n.MsgRef, n.Topic, n.Event, n.Payload})
 }
