@@ -229,10 +229,10 @@ func (x *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		conn:          conn,
 		config:        x.config,
 		readerr:       make(chan error),
-		msg:           make(chan *phx.Msg),       // TODO: buffered?
-		info:          make(chan *Info),          // TODO: buffered?
-		upload:        make(chan *phx.UploadMsg), // TODO: buffered?
-		nav:           make(chan *phx.Nav),       // TODO: buffered?
+		msg:           make(chan *phx.Msg),
+		info:          make(chan *Info),
+		upload:        make(chan *phx.UploadMsg),
+		nav:           make(chan *phx.Nav),
 		uploadConfigs: make(map[string]*UploadConfig),
 	}
 	go s.read()
@@ -771,6 +771,7 @@ func SendInfo(ctx context.Context, info *Info) {
 	if s == nil {
 		return
 	}
+	// TODO should we do this in a goroutine?
 	s.info <- info
 }
 
@@ -791,10 +792,10 @@ const (
 )
 
 // PushNav supports push patching and push redirecting from server to View
-func PushNav(ctx context.Context, typ LiveNavType, path string, params url.Values, replaceHistory bool) {
+func PushNav(ctx context.Context, typ LiveNavType, path string, params url.Values, replaceHistory bool) error {
 	s := socketValue(ctx)
 	if s == nil {
-		return
+		return nil
 	}
 	// build new URL from existing URL and new path and params
 	url := url.URL{Path: path, RawQuery: params.Encode()}
@@ -810,9 +811,7 @@ func PushNav(ctx context.Context, typ LiveNavType, path string, params url.Value
 	if ok {
 		err := hp.HandleParams(ctx, to)
 		if err != nil {
-			// TODO better error handling
-			log.Println(err)
-			return
+			return err
 		}
 	}
 
@@ -822,6 +821,7 @@ func PushNav(ctx context.Context, typ LiveNavType, path string, params url.Value
 
 	// don't block waiting for nav channel to be read
 	go func() { s.nav <- nm }()
+	return nil
 }
 
 type socketContextKey struct{}
