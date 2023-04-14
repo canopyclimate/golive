@@ -189,7 +189,7 @@ func (t *Tree) WriteTo(w io.Writer) (written int64, err error) {
 			err = writeJSONString(t.Statics[0])
 		}
 		return written, err
-	} else if !t.isRange && len(t.Statics) < len(t.Dynamics)+1 {
+	} else {
 		// In the case of non-range trees, len(Dynamics) should be exactly 1 less than len(Statics)
 		// because we zip them together. If not, we need to add empty
 		// strings to the statics until that is true.
@@ -198,23 +198,20 @@ func (t *Tree) WriteTo(w io.Writer) (written int64, err error) {
 		// strings are not included in the statics array, but are necessary
 		// to zip the statics and dynamics together correctly when the tree is
 		// passed to the client.
+		appendEmpty := func(n int) {
+			for len(t.Statics) < n+1 {
+				t.Statics = append(t.Statics, "")
+			}
+		}
 		if t.isRange {
+			// only append onto range of ranges not range of trees
 			if ranges, ok := t.Dynamics[0].([]any); ok {
-				// range of ranges
 				n = len(ranges)
+				appendEmpty(n)
 			}
-		}
-		for len(t.Statics) < n+1 {
-			t.Statics = append(t.Statics, "")
-		}
-	} else if t.isRange && len(t.Dynamics) > 0 {
-		switch t.Dynamics[0].(type) {
-		case []any:
-			if len(t.Statics) < len(t.Dynamics[0].([]any))+1 {
-				for len(t.Statics) < len(t.Dynamics[0].([]any))+1 {
-					t.Statics = append(t.Statics, "")
-				}
-			}
+		} else {
+			n = len(t.Dynamics)
+			appendEmpty(n)
 		}
 	}
 
