@@ -1,7 +1,6 @@
 package tmpl
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"io"
@@ -132,13 +131,8 @@ var (
 
 // JSON returns a JSON representation of the tree.
 func (t *Tree) JSON() ([]byte, error) {
-	var b bytes.Buffer
-	w := bufio.NewWriter(&b)
-	_, err := t.WriteTo(w)
-	if err != nil {
-		return nil, err
-	}
-	err = w.Flush()
+	b := new(bytes.Buffer)
+	_, err := t.WriteTo(b)
 	if err != nil {
 		return nil, err
 	}

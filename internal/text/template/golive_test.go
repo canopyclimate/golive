@@ -1,7 +1,6 @@
 package template
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"reflect"
@@ -40,6 +39,7 @@ func TestExplore(t *testing.T) {
 		fmt.Println("----")
 	}
 }
+
 func TestComments(t *testing.T) {
 	x, err := New("x").Parse("<div> {{ .X }} def {{/* comment */}} xyz</div>")
 	if err != nil {
@@ -108,15 +108,12 @@ func TestWithRange(t *testing.T) {
 	}
 
 	// test t.WriteTo
-	var b bytes.Buffer
-	w := bufio.NewWriter(&b)
-	try.E1(rangeTree.WriteTo(w))
-	try.E(w.Flush())
+	b := new(bytes.Buffer)
+	try.E1(rangeTree.WriteTo(b))
 	res := b.String()
 	if res != `{"d":[["1"],["2"],["3"]],"s":[" X is "," "]}` {
 		t.Fatal("range tree did not match expected", res)
 	}
-
 }
 
 func TestWithRangeWithSub(t *testing.T) {
@@ -137,15 +134,12 @@ func TestWithRangeWithSub(t *testing.T) {
 	fmt.Println("w/Statics", string(out))
 
 	// test t.WriteTo
-	var b bytes.Buffer
-	w := bufio.NewWriter(&b)
-	try.E1(lt.WriteTo(w))
-	try.E(w.Flush())
+	b := new(bytes.Buffer)
+	try.E1(lt.WriteTo(b))
 	res := b.String()
 
 	want := `{"0":{"d":[[{"d":[["1"],["2"],["3"]],"s":["Y is ","."]}],[{"d":[["1"],["2"],["3"]],"s":["Y is ","."]}],[{"d":[["1"],["2"],["3"]],"s":["Y is ","."]}]],"s":[" X is ",""]},"s":["<div> ","</div>"]}`
 	if res != want {
 		t.Fatalf("range tree did not match expected \n%s want \n%s", res, want)
 	}
-
 }
