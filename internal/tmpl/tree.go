@@ -34,33 +34,16 @@ func (t *Tree) AppendStatic(text string) {
 	}
 	// When a comment is present, it causes two consecutive statics.
 	// Concatenate those statics to preserve the alternating statics/dynamics invariant.
-	if !t.isRange {
-		if len(t.Statics) > len(t.Dynamics) {
-			t.Statics[len(t.Statics)-1] += text
-			return
+	n := len(t.Dynamics)
+	if t.isRange && n > 0 {
+		if ranges, ok := t.Dynamics[t.rangeStep].([]any); ok {
+			// range of ranges, not range of trees
+			n = len(ranges)
 		}
-		t.Statics = append(t.Statics, text)
-		return
 	}
-
-	// handle ranges
-	if len(t.Dynamics) > 0 {
-		switch rangeDyn := t.Dynamics[t.rangeStep].(type) {
-		// range of ranges
-		case []any:
-			if len(t.Statics) > len(rangeDyn) {
-				t.Statics[len(t.Statics)-1] += text
-				return
-			}
-		// range of subtrees
-		case *Tree:
-			if len(t.Statics) > len(t.Dynamics) {
-				t.Statics[len(t.Statics)-1] += text
-				return
-			}
-			t.Statics = append(t.Statics, text)
-			return
-		}
+	if len(t.Statics) > n {
+		t.Statics[len(t.Statics)-1] += text
+		return
 	}
 	t.Statics = append(t.Statics, text)
 }
