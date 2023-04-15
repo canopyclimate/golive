@@ -25,7 +25,7 @@ func (t *Template) executeTree(data any) (tree *tmpl.Tree, err error) {
 	if !ok {
 		value = reflect.ValueOf(data)
 	}
-	tree = new(tmpl.Tree)
+	tree = tmpl.NewTree()
 	state := &state{
 		tmpl: t,
 		wr:   new(bytes.Buffer),

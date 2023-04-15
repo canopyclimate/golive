@@ -11,28 +11,25 @@ import (
 
 type Tree struct {
 	Statics        []string
-	Dynamics       []any // string | *Tree | [](string | *Tree)
+	Dynamics       []any // string | *Tree | []any
 	ExcludeStatics bool  // controls if MarshalText Statics with serializing
 	Title          string
 	isRange        bool
 	rangeStep      int
 }
 
+func NewTree() *Tree {
+	return &Tree{Statics: []string{""}}
+}
+
 func (t *Tree) AppendStatic(text string) {
-	// only add first set of statics inside a range
 	if t.rangeStep > 0 {
+		// We're inside a range loop, and we've already seen all the statics.
 		return
 	}
-	// When a comment is present, it causes two consecutive statics.
-	// Concatenate those statics to preserve the alternating statics/dynamics invariant.
-	n := len(t.Dynamics)
-	if t.isRange && n > 0 {
-		if ranges, ok := t.Dynamics[t.rangeStep].([]any); ok {
-			// range of ranges, not range of trees
-			n = len(ranges)
-		}
-	}
-	if len(t.Statics) > n {
+	// Prevent two consecutive statics by concatenation.
+	nDyn := t.nDyn()
+	if len(t.Statics) > nDyn {
 		t.Statics[len(t.Statics)-1] += text
 		return
 	}
@@ -40,46 +37,25 @@ func (t *Tree) AppendStatic(text string) {
 }
 
 func (t *Tree) AppendDynamic(d string) {
-	// if we are adding a dynamic and there are no statics then it is
-	// probably (I can't think of another reason) the case that
-	// the template starts with a dynamic (e.g. "{{...}}..." )
-	// in this case we need to add an empty static to the tree because
-	// the template processor skips the first (empty) string
-	if len(t.Statics) == 0 {
-		t.Statics = append(t.Statics, "")
-	}
-
-	if !t.isRange {
-		t.Dynamics = append(t.Dynamics, d)
-		return
-	}
-
-	// for ranges, the Dynanics are an array of arrays of (string or *Tree)
-	if len(t.Dynamics) != t.rangeStep+1 {
-		// create the array if it doesn't exist already this range step
-		t.Dynamics = append(t.Dynamics, []any{d})
-		return
-	}
-	// get the array for this range step and append the next dynamic
-	dyn := t.Dynamics[t.rangeStep].([]any)
-	dyn = append(dyn, d)
-	t.Dynamics[t.rangeStep] = dyn
+	t.appendDynamic(d)
 }
 
 func (t *Tree) AppendSub() *Tree {
-	// if we are adding a dynamic and there are no statics then it is
-	// probably (I can't think of another reason) the case that
-	// the template starts with a dynamic (e.g. "{{...}}..." )
-	// in this case we need to add an empty static to the tree because
-	// the template processor skips the first (empty) string
-	if len(t.Statics) == 0 {
-		t.Statics = append(t.Statics, "")
-	}
-	sub := new(Tree)
-	t.Dynamics = append(t.Dynamics, sub)
+	sub := NewTree()
+	t.appendDynamic(sub)
 	return sub
 }
 
+// AppendRangeSub adds a range subnode to tree.
+// Templates call it on entering a range statement.
+func (t *Tree) AppendRangeSub() *Tree {
+	sub := NewTree()
+	sub.isRange = true
+	t.appendDynamic(sub)
+	return sub
+}
+
+// IncRangeStep records that a single range iteration has completed it.
 func (t *Tree) IncRangeStep() {
 	if t == nil {
 		return
@@ -87,27 +63,55 @@ func (t *Tree) IncRangeStep() {
 	t.rangeStep++
 }
 
-func (t *Tree) AppendRangeSub() *Tree {
-	sub := new(Tree)
-	sub.isRange = true
-	// if this isn't a range tree simply append the sub
+func (t *Tree) appendDynamic(d any) {
+	// For non-ranges, we pair dynamics with statics directly.
 	if !t.isRange {
-		t.Dynamics = append(t.Dynamics, sub)
-		return sub
+		t.appendDynamicWithStatic(d)
+		return
 	}
 
-	// if this is a range tree, append the sub tree
-	// to the dynamics array for the current range step
-	if len(t.Dynamics) != t.rangeStep+1 {
-		// create the array if it doesn't exist already this range step
-		t.Dynamics = append(t.Dynamics, []any{sub})
-		return sub
+	// For ranges, the Dynamics are held in the interior slices, each of which is a []any.
+	// Append d to that inner slice, ensuring space first as needed.
+	if t.rangeStep >= len(t.Dynamics) {
+		t.Dynamics = append(t.Dynamics, []any(nil))
 	}
-	// get the array for this range step and append the sub as the next dynamic
 	dyn := t.Dynamics[t.rangeStep].([]any)
-	dyn = append(dyn, sub)
-	t.Dynamics[t.rangeStep] = dyn
-	return sub
+	t.Dynamics[t.rangeStep] = append(dyn, d)
+	// During the first range iteration, append placeholder statics in parallel with dynamics.
+	if t.rangeStep == 0 {
+		t.Statics = append(t.Statics, "")
+	}
+}
+
+// appendDynamicWithStatic adds a to t's dynamics,
+// preserving the alternating static/dynamic layout.
+// Note that the empty static that gets appended here
+// will get replaced if AppendStatic gets called next.
+func (t *Tree) appendDynamicWithStatic(a any) {
+	t.Dynamics = append(t.Dynamics, a)
+	t.Statics = append(t.Statics, "")
+}
+
+// nDyn returns the number of dynamic elements of t.
+func (t *Tree) nDyn() int {
+	nDyn := len(t.Dynamics)
+	if !t.isRange || nDyn == 0 {
+		return nDyn
+	}
+	// In a range loop, the Dynamics are stored in the interior slices;
+	// the outer slice is for each iteration of the range loop.
+	// This must be identical for each element, so it suffices
+	// to look at index 0, if present.
+	return len(t.Dynamics[0].([]any))
+}
+
+// Valid performs an internal consistency check and returns an error if it fails.
+func (t *Tree) Valid() error {
+	nDyn := t.nDyn()
+	if nDyn+1 != len(t.Statics) {
+		return fmt.Errorf("nDyn = %d, nStatic = %d, want nDyn + 1 = nStatic", nDyn, len(t.Statics))
+	}
+	return nil
 }
 
 func Diff(a, b *Tree) {
@@ -117,7 +121,6 @@ func Diff(a, b *Tree) {
 var (
 	quoteColon   = []byte(`":`)
 	startStatics = []byte(`,"s":[`)
-	emptyString  = []byte(`""`)
 	startTitle   = []byte(`,"t":`)
 )
 
@@ -165,40 +168,12 @@ func (t *Tree) WriteTo(w io.Writer) (written int64, err error) {
 	}
 
 	// handle no dynamics case - basically collapse tree into a single string
-	if n := len(t.Dynamics); n == 0 {
-		switch len(t.Statics) {
-		case 0:
-			// no statics (end of template perhaps?)
-			err = writeBytes(emptyString)
-			return written, err
-		case 1:
-			err = writeJSONString(t.Statics[0])
+	if len(t.Dynamics) == 0 {
+		if len(t.Statics) != 1 {
+			return written, fmt.Errorf("internal error: malformed tree with 0 dynamics and %d statics", len(t.Statics))
 		}
+		err = writeJSONString(t.Statics[0])
 		return written, err
-	} else {
-		// In the case of non-range trees, len(Dynamics) should be exactly 1 less than len(Statics)
-		// because we zip them together. If not, we need to add empty
-		// strings to the statics until that is true.
-		// Note - the likely cause of this is a template or dynamic part of
-		// a template starts and/or ends with an empty string.  These empty
-		// strings are not included in the statics array, but are necessary
-		// to zip the statics and dynamics together correctly when the tree is
-		// passed to the client.
-		appendEmpty := func(n int) {
-			for len(t.Statics) < n+1 {
-				t.Statics = append(t.Statics, "")
-			}
-		}
-		if t.isRange {
-			// only append onto range of ranges not range of trees
-			if ranges, ok := t.Dynamics[0].([]any); ok {
-				n = len(ranges)
-				appendEmpty(n)
-			}
-		} else {
-			n = len(t.Dynamics)
-			appendEmpty(n)
-		}
 	}
 
 	if err := writeByte('{'); err != nil {
