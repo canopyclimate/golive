@@ -2,7 +2,6 @@ package template
 
 import (
 	"bytes"
-	"fmt"
 	"reflect"
 	"testing"
 
@@ -33,10 +32,10 @@ func TestExplore(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		fmt.Println(dot, ":")
-		fmt.Println("w/Statics", string(out))
-		fmt.Println("w/o Statics", string(wout))
-		fmt.Println("----")
+		t.Log(dot, ":")
+		t.Log("w/Statics", string(out))
+		t.Log("w/o Statics", string(wout))
+		t.Log("----")
 	}
 }
 
@@ -65,10 +64,10 @@ func TestComments(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		fmt.Println(dot, ":")
-		fmt.Println("w/Statics", string(out))
-		fmt.Println("w/o Statics", string(wout))
-		fmt.Println("----")
+		t.Log(dot, ":")
+		t.Log("w/Statics", string(out))
+		t.Log("w/o Statics", string(wout))
+		t.Log("----")
 	}
 }
 
@@ -86,21 +85,21 @@ func TestWithRange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println(dot, ":")
-	fmt.Println("w/Statics", string(out))
+	t.Log(dot, ":")
+	t.Log("w/Statics", string(out))
 	rangeTree := lt.Dynamics[0].(*tmpl.Tree)
 	targetStatics := []string{" X is ", " "}
 	targetDynamics := [][]any{{"1"}, {"2"}, {"3"}}
 	passes := true
 	if !reflect.DeepEqual(rangeTree.Statics, targetStatics) {
 		passes = false
-		fmt.Println("expected rangeTree.Statics to be:", targetStatics, "got:", rangeTree.Statics)
+		t.Log("expected rangeTree.Statics to be:", targetStatics, "got:", rangeTree.Statics)
 	}
 	// for each dynamic test against target
 	for i, dyn := range rangeTree.Dynamics {
 		if !reflect.DeepEqual(dyn, targetDynamics[i]) {
 			passes = false
-			fmt.Println("expected rangeTree.Dynamics to be:", targetDynamics, "got:", rangeTree.Dynamics)
+			t.Log("expected rangeTree.Dynamics to be:", targetDynamics, "got:", rangeTree.Dynamics)
 		}
 	}
 	if !passes {
@@ -130,8 +129,8 @@ func TestWithRangeWithSub(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println(dot, ":")
-	fmt.Println("w/Statics", string(out))
+	t.Log(dot, ":")
+	t.Log("w/Statics", string(out))
 
 	// test t.WriteTo
 	b := new(bytes.Buffer)
