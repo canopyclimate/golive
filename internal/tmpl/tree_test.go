@@ -40,6 +40,9 @@ func TestOneDynamicWithEmptyStaticResultsInString(t *testing.T) {
 		t.Fatal(err)
 	}
 	lt, err := x.ExecuteTree(map[string]any{"X": "foo"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	buf := new(bytes.Buffer)
 	n, err := lt.WriteTo(buf)
 	if err != nil {
@@ -64,6 +67,9 @@ func TestVariableDynamic(t *testing.T) {
 		t.Fatal(err)
 	}
 	lt, err := x.ExecuteTree(map[string]any{})
+	if err != nil {
+		t.Fatal(err)
+	}
 	buf := new(bytes.Buffer)
 	n, err := lt.WriteTo(buf)
 	if err != nil {
@@ -98,6 +104,9 @@ func TestTStructInTemplate(t *testing.T) {
 		t.Fatal(err)
 	}
 	lt, err := x.ExecuteTree(map[string]any{})
+	if err != nil {
+		t.Fatal(err)
+	}
 	buf := new(bytes.Buffer)
 	n, err := lt.WriteTo(buf)
 	if err != nil {
@@ -174,6 +183,9 @@ func TestRangeTemplateSerialization(t *testing.T) {
 		t.Fatal(err)
 	}
 	lt, err := x.ExecuteTree(map[string][]string{"X": {"foo", "bar"}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	buf := new(bytes.Buffer)
 	n, err := lt.WriteTo(buf)
 	if err != nil {
