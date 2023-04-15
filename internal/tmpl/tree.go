@@ -9,14 +9,6 @@ import (
 	"github.com/canopyclimate/golive/internal/json"
 )
 
-type NodeType int
-
-const (
-	NodeTypeSubtree NodeType = iota
-	NodeTypeStatic
-	NodeTypeDynamic
-)
-
 type Tree struct {
 	Statics        []string
 	Dynamics       []any // string | *Tree | [](string | *Tree)
