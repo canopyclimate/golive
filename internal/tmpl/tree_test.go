@@ -13,7 +13,7 @@ import (
 )
 
 func TestBasicSerialization(t *testing.T) {
-	root := new(tmpl.Tree)
+	root := tmpl.NewTree()
 	tree := root
 	tree.AppendDynamic("abc")
 	tree.AppendStatic("def")
@@ -123,7 +123,7 @@ func TestTStructInTemplate(t *testing.T) {
 }
 
 func TestEmptyRangeSerialization(t *testing.T) {
-	root := new(tmpl.Tree)
+	root := tmpl.NewTree()
 	tree := root
 	tree.AppendDynamic("abc")
 	tree.AppendStatic("def")
@@ -144,7 +144,7 @@ func TestEmptyRangeSerialization(t *testing.T) {
 }
 
 func TestNonEmptyRangeSerialization(t *testing.T) {
-	root := new(tmpl.Tree)
+	root := tmpl.NewTree()
 	tree := root
 	tree.AppendDynamic("abc")
 	tree.AppendStatic("def")
@@ -206,7 +206,7 @@ func FuzzTreeSerialization(f *testing.F) {
 		if !utf8.ValidString(s) {
 			return
 		}
-		root := new(tmpl.Tree)
+		root := tmpl.NewTree()
 		trees := []*tmpl.Tree{root}
 		prng := rand.New(rand.NewSource(seed))
 		sub := func() string {
@@ -239,7 +239,7 @@ func FuzzTreeSerialization(f *testing.F) {
 func BenchmarkWideStatic(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		root := new(tmpl.Tree)
+		root := tmpl.NewTree()
 		for j := 0; j < 20; j++ {
 			root.AppendStatic("a")
 		}
@@ -253,7 +253,7 @@ func BenchmarkWideStatic(b *testing.B) {
 func BenchmarkWideDynamic(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		root := new(tmpl.Tree)
+		root := tmpl.NewTree()
 		for j := 0; j < 20; j++ {
 			root.AppendDynamic("a")
 		}
@@ -267,7 +267,7 @@ func BenchmarkWideDynamic(b *testing.B) {
 func BenchmarkDeep(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		root := new(tmpl.Tree)
+		root := tmpl.NewTree()
 		tree := root
 		for j := 0; j < 20; j++ {
 			tree = tree.AppendSub()
