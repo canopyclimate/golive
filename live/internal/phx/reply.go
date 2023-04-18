@@ -7,6 +7,7 @@ type Response struct {
 	Diff     json.RawMessage `json:"diff,omitempty"`
 	Config   json.RawMessage `json:"config,omitempty"`
 	Entries  json.RawMessage `json:"entries,omitempty"`
+	Redirect json.RawMessage `json:"redirect,omitempty"`
 }
 
 type Payload struct {
@@ -30,9 +31,13 @@ type Diff struct {
 	Payload json.RawMessage
 }
 
+type Redirect struct {
+	To string `json:"to,omitempty"`
+}
+
 type NavPayload struct {
-	To   string `json:"to"`
-	Kind string `json:"kind"`
+	To   string `json:"to,omitempty"`
+	Kind string `json:"kind,omitempty"`
 }
 
 type Nav struct {
@@ -135,6 +140,27 @@ func NewHeartbeat(msgRef string) *Reply {
 		Event:  "phx_reply",
 		Payload: Payload{
 			Status: "ok",
+		},
+	}
+}
+
+func NewRedirect(msg Msg, to string) *Reply {
+	redirect, err := json.Marshal(Redirect{
+		To: to,
+	})
+	if err != nil {
+		panic(err) // should never happen
+	}
+	return &Reply{
+		JoinRef: &msg.JoinRef,
+		MsgRef:  &msg.MsgRef,
+		Topic:   msg.Topic,
+		Event:   "phx_reply",
+		Payload: Payload{
+			Status: "ok",
+			Response: Response{
+				Redirect: redirect,
+			},
 		},
 	}
 }
