@@ -319,6 +319,7 @@ type socket struct {
 	readerr           chan error
 	title             string
 	url               url.URL
+	redirect          string
 	csrfToken         string
 	uploadConfigs     map[string]*UploadConfig
 	activeUploadRef   string
@@ -492,6 +493,10 @@ func (s *socket) dispatch(ctx context.Context, msg *phx.Msg) ([]byte, error) {
 
 		default:
 			return nil, fmt.Errorf("unknown event type: %v", et)
+		}
+		// check if we have a redirect
+		if s.redirect != "" {
+			return phx.NewRedirect(*msg, s.redirect).JSON()
 		}
 
 		// Now re-render the Tree
@@ -821,6 +826,16 @@ func PushNav(ctx context.Context, typ LiveNavType, path string, params url.Value
 
 	// don't block waiting for nav channel to be read
 	go func() { s.nav <- nm }()
+	return nil
+}
+
+// Redirect sends a ("dead") redirect event to the View
+func Redirect(ctx context.Context, url url.URL) error {
+	s := socketValue(ctx)
+	if s == nil {
+		return nil
+	}
+	s.redirect = url.String()
 	return nil
 }
 

@@ -64,6 +64,11 @@ func main() {
 	static.PathPrefix("/js/").Handler(publicFS)
 	static.PathPrefix("/img/").Handler(publicFS)
 
+	// setup "dead" route
+	r.HandleFunc("/dead", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("This is a dead route"))
+	})
+
 	// setup websocket route
 	r.Handle("/live/websocket", live.NewWebsocketHandler(liveConfig))
 
@@ -188,6 +193,13 @@ func (c *Counter) HandleEvent(ctx context.Context, e *live.Event) error {
 			// TODO: nil, nil, etc.
 			c.Changeset = cc.NewChangeset(nil, nil, "", &Person{})
 		}
+	case "redirect":
+		// redirect to the given path
+		url, e := url.Parse("/dead")
+		if e != nil {
+			return e
+		}
+		live.Redirect(ctx, *url)
 	}
 	return nil
 }
@@ -210,6 +222,7 @@ func (c *Counter) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl.T
 				<br />
 				<input type="submit" value="Submit" />
 			</form>
+			<button phx-click="redirect">Redirect</button>
 			{{ if and .First .Last }}
 				<h1>Hello {{ .First }} {{ .Last }}</h1>
 			{{ end }}
