@@ -829,7 +829,7 @@ func PushNav(ctx context.Context, typ LiveNavType, path string, params url.Value
 	return nil
 }
 
-// Redirect sends a ("dead") redirect event to the View
+// Redirect sends an event to the View that triggers a full page load to url.
 func Redirect(ctx context.Context, url url.URL) error {
 	s := socketValue(ctx)
 	if s == nil {
