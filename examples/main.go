@@ -199,7 +199,7 @@ func (c *Counter) HandleEvent(ctx context.Context, e *live.Event) error {
 		if e != nil {
 			return e
 		}
-		live.Redirect(ctx, *url)
+		live.Redirect(ctx, url)
 	}
 	return nil
 }
