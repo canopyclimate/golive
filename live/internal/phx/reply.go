@@ -149,7 +149,8 @@ func NewRedirect(msg Msg, to string) *Reply {
 		To: to,
 	})
 	if err != nil {
-		panic(err) // should never happen
+		// to is created by calling String() on a url.URL, so it should always be valid
+		panic(err)
 	}
 	return &Reply{
 		JoinRef: &msg.JoinRef,
