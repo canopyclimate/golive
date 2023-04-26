@@ -123,6 +123,7 @@ func TestReset(t *testing.T) {
 		Decoder:   gv,
 	}
 
+	// test changeset
 	cs, err := cc.NewChangeset(&Person{})
 	if err != nil {
 		t.Errorf("Unexpected error from NewChangeset: %s", err)
@@ -139,6 +140,7 @@ func TestReset(t *testing.T) {
 		t.Errorf("Expected First to be set, got %s", cs.Struct.(*Person).First)
 	}
 
+	// reset
 	cs.Reset()
 
 	if !cs.Valid() {
@@ -150,5 +152,17 @@ func TestReset(t *testing.T) {
 	}
 	if s.(*Person).First != "" {
 		t.Errorf("Expected First to be empty, got %s", s.(*Person).First)
+	}
+
+	// update again
+	cs.Update(url.Values{
+		"First": []string{"fi"},
+		"Last":  []string{"a"},
+	}, "update")
+	if cs.Valid() {
+		t.Errorf("Expected Valid to be false, got %v", cs.Valid())
+	}
+	if cs.Struct.(*Person).First != "fi" {
+		t.Errorf("Expected First to be set, got %s", cs.Struct.(*Person).First)
 	}
 }

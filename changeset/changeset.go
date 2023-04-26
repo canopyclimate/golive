@@ -42,10 +42,17 @@ type Changeset struct {
 	config  *Config
 }
 
+// Type returns the name of the struct.
 func (c *Changeset) Type() string {
 	return reflect.TypeOf(c.Struct).Elem().Name()
 }
 
+// Valid returns true if the changeset is valid or false if it is not.
+// Valid depends on the last action that was performed on the changeset along
+// with the Errors map and whether or not the field was touched.
+// If the action is empty, Valid will always return true.
+// If the action is not empty, Valid will return true if there are no errors
+// or if there are errors but the field was not touched.
 func (c *Changeset) Valid() bool {
 	if c.action == "" {
 		return true
@@ -60,17 +67,14 @@ func (c *Changeset) Valid() bool {
 	return true
 }
 
-// AsStruct returns the changeset as a struct or an error if the data could not be decoded into the struct.
+// AsStruct returns the changeset decoded into a struct or an error if there was a problem decoding.
 func (c *Changeset) AsStruct() (any, error) {
 	s := c.Struct
 	err := c.config.Decoder.Decode(s, c.Values)
 	return s, err
 }
 
-// NewChangeset returns a new Changeset based on the old data, new data, and action
-// Typically this is called to initialize a changeset. If action is empty, the changeset
-// will always return true for Valid. Passing a non-empty action will cause the
-// changeset to make the validation errors available if the struct is not valid.
+// NewChangeset returns a new Changeset based on the provided pointer to a struct.
 func (cc *Config) NewChangeset(obj any) (*Changeset, error) {
 	// we need a pointer to a struct to decode into
 	if reflect.TypeOf(obj).Kind() != reflect.Ptr {
@@ -78,7 +82,6 @@ func (cc *Config) NewChangeset(obj any) (*Changeset, error) {
 	}
 
 	c := &Changeset{
-		Values: url.Values{},
 		Struct: obj,
 		config: cc,
 	}
@@ -86,13 +89,17 @@ func (cc *Config) NewChangeset(obj any) (*Changeset, error) {
 }
 
 // Update updates the changeset with new data and action. If action is empty, the changeset
-// will always return true for Valid. Passing a non-empty action will cause the
-// changeset to make the validation errors available if the struct is not valid.
+// will always return true for Valid(). Passing a non-empty action will cause the
+// changeset to run validations which may change the result of Valid() depending on
+// whether or not there are errors and whether or not the field was touched.
 func (c *Changeset) Update(newData url.Values, action string) error {
 	c.action = action
 	// TODO should we call Reset() if newData is nil and action is empty?
 
 	// merge old and new data and calculate changes
+	if c.Values == nil {
+		c.Values = url.Values{}
+	}
 	for k, v := range newData {
 		if !slices.Equal(c.Values[k], v) {
 			if c.Changes == nil {
@@ -132,7 +139,7 @@ func (c *Changeset) Update(newData url.Values, action string) error {
 func (c *Changeset) Reset() {
 	c.Errors = nil
 	c.Changes = nil
-	c.Values = url.Values{}
+	c.Values = nil
 	c.Struct = reflect.New(reflect.TypeOf(c.Struct).Elem()).Interface()
 
 	c.action = ""
@@ -152,7 +159,7 @@ func (c *Changeset) Error(key string) error {
 	return c.Errors[key]
 }
 
-// HasError returns true if the given key has an error.
+// HasError returns true if Error(key) returns a non-nil error
 func (c *Changeset) HasError(key string) bool {
 	return c.Error(key) != nil
 }
