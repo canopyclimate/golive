@@ -128,7 +128,10 @@ func loadTemplate(path string, funcs htmltmpl.FuncMap) *htmltmpl.Template {
 // use a GoPlayground-based changeset to validate the form input
 // and convert it to a struct
 var ga = changeset.NewGoPlaygroundChangesetConfig()
-var cc = changeset.NewConfig(ga, ga)
+var cc = changeset.Config{
+	Validator: ga,
+	Decoder:   ga,
+}
 
 // Person is the struct that we will validate using form input and changesets
 type Person struct {
@@ -150,7 +153,11 @@ func (c *Counter) Mount(ctx context.Context, p live.Params) error {
 	if c.Count == 0 {
 		c.Count = 1
 	}
-	c.Changeset = cc.NewChangeset(nil, nil, "", new(Person))
+	var err error
+	c.Changeset, err = cc.NewChangeset(new(Person))
+	if err != nil {
+		return err
+	}
 	c.Ticks = 10
 	if c.ticker == nil {
 		c.ticker = time.NewTicker(time.Second)
@@ -179,19 +186,28 @@ func (c *Counter) HandleEvent(ctx context.Context, e *live.Event) error {
 	// form events
 	case "change":
 		// validate input
-		c.Changeset.Update(e.Data, e.Type)
+		err := c.Changeset.Update(e.Data, e.Type)
+		if err != nil {
+			return err
+		}
 	case "submit":
 		// validate input
-		c.Changeset.Update(e.Data, e.Type)
+		err := c.Changeset.Update(e.Data, e.Type)
+		if err != nil {
+			return err
+		}
 		// if valid "Save" the data
-		if c.Changeset.Valid {
+		if c.Changeset.Valid() {
 			// "Save" the data
-			p := try.E1(c.Changeset.AsStruct()).(*Person)
+			s, err := c.Changeset.AsStruct()
+			if err != nil {
+				return err
+			}
+			p := s.(*Person)
 			c.First = p.First
 			c.Last = p.Last
 			// clear the changeset
-			// TODO: nil, nil, etc.
-			c.Changeset = cc.NewChangeset(nil, nil, "", &Person{})
+			c.Changeset.Reset()
 		}
 	case "redirect":
 		// redirect to the given path
