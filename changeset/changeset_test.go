@@ -33,12 +33,15 @@ func TestChangeset(t *testing.T) {
 	} {
 		gv := NewGoPlaygroundChangesetConfig()
 		cc := NewConfig(gv, gv)
-		cs := cc.NewChangeset(
+		cs, err := cc.NewChangeset(
 			url.Values{}, // empty "old" data
 			data,         // "new" data
 			"action",     // must be non-empty to run validations
 			&Person{},
 		)
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		fmt.Println("Valid?", cs.Valid)
 		fmt.Println("Errors:", cs.Errors)

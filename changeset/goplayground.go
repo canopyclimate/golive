@@ -82,19 +82,18 @@ func NewGoPlaygroundChangesetConfig() GoPlaygroundChangesetConfig {
 // Validate runs decodes the URL values to the struct before running
 // the validations on the changeset and updating Valid along with Errors if
 // there are any.
-func (a GoPlaygroundChangesetConfig) Validate(c *Changeset) (bool, map[string]any) {
+func (a GoPlaygroundChangesetConfig) Validate(c *Changeset) (map[string]error, bool, error) {
 
 	// decode first
 	if err := a.decoder.Decode(c.Struct, c.Values); err != nil {
-		log.Printf("error decoding changeset: %v", err)
-		return false, nil
+		return nil, false, err
 	}
 
 	// run validations
 	err := a.validator.Struct(c.Struct)
 	// if any errors, set Valid to false (which it should already be but doesn't hurt to be defensive)
 	if err == nil {
-		return true, nil
+		return nil, true, nil
 	}
 
 	// attempt to cast to validator.ValidationErrors and Translate
@@ -103,11 +102,11 @@ func (a GoPlaygroundChangesetConfig) Validate(c *Changeset) (bool, map[string]an
 		// remove prefix from field name
 		prefix := c.StructType + "."
 		for k, v := range translatedErrors {
-			trimmed := strings.TrimLeft(k, prefix)
-			c.Errors[trimmed] = v
+			trimmed := strings.TrimPrefix(k, prefix)
+			c.Errors[trimmed] = fmt.Errorf(v)
 		}
 	}
-	return false, c.Errors
+	return c.Errors, false, nil
 }
 
 // Decode decodes the URL values to the struct.

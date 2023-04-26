@@ -9,7 +9,7 @@ import (
 
 // Validator validates a changeset and returns a map of field name to error message.
 type Validator interface {
-	Validate(c *Changeset) (bool, map[string]any)
+	Validate(c *Changeset) (map[string]error, bool, error)
 }
 
 // Decoder decodes a url.Values into a struct.
@@ -36,14 +36,14 @@ func NewConfig(v Validator, d Decoder) *Config {
 // and if not a way to access the errors for each field. A changeset is meant to
 // work with HTML form data in concert with the phx-change and phx-submit events.
 type Changeset struct {
-	Action     string          // only run validations if action is not empty
-	Valid      bool            // true if no validation errors or no action (used in form errors)
-	Errors     map[string]any  // map of field name to error message
-	Changes    map[string]any  // map of field name that differs from the original value
-	Touched    map[string]bool // map of field names that were touched
-	Values     url.Values      // map of merged changes and original values
-	Struct     any             // type of object to decode into
-	StructType string          // type name of the struct pointer
+	Action     string           // only run validations if action is not empty
+	Valid      bool             // true if no validation errors or no action (used in form errors)
+	Errors     map[string]error // map of field name to error message
+	Changes    map[string]any   // map of field name that differs from the original value
+	Touched    map[string]bool  // map of field names that were touched
+	Values     url.Values       // map of merged changes and original values
+	Struct     any              // type of object to decode into
+	StructType string           // type name of the struct pointer
 
 	config *Config
 }
@@ -59,12 +59,12 @@ func (c *Changeset) AsStruct() (any, error) {
 // Typically this is called to initialize a changeset. If action is empty, the changeset
 // will always return true for Valid. Passing a non-empty action will cause the
 // changeset to make the validation errors available if the struct is not valid.
-func (cc *Config) NewChangeset(old, new url.Values, action string, obj any) *Changeset {
+func (cc *Config) NewChangeset(old, new url.Values, action string, obj any) (*Changeset, error) {
 
 	c := &Changeset{
 		Action:     action,
 		Valid:      action == "", // default to true if no action, otherwise false
-		Errors:     make(map[string]any),
+		Errors:     make(map[string]error),
 		Changes:    make(map[string]any),
 		Touched:    make(map[string]bool),
 		Values:     url.Values{},
@@ -92,9 +92,10 @@ func (cc *Config) NewChangeset(old, new url.Values, action string, obj any) *Cha
 				c.Touched[k] = true
 			}
 		}
-		valid, errors := c.config.validator.Validate(c)
+		errors, valid, err := c.config.validator.Validate(c)
 		c.Valid = valid
 		c.Errors = errors
+		return c, err
 	}
 	// shallow diff to find changes
 	for k, v := range new {
@@ -102,16 +103,16 @@ func (cc *Config) NewChangeset(old, new url.Values, action string, obj any) *Cha
 			c.Changes[k] = v
 		}
 	}
-	return c
+	return c, nil
 }
 
 // Update updates the changeset with new data and action. If action is empty, the changeset
 // will always return true for Valid. Passing a non-empty action will cause the
 // changeset to make the validation errors available if the struct is not valid.
-func (c *Changeset) Update(newData url.Values, action string) {
+func (c *Changeset) Update(newData url.Values, action string) error {
 	c.Action = action
 	c.Valid = action == ""
-	c.Errors = make(map[string]any)
+	c.Errors = make(map[string]error)
 
 	// merge old and new data and calculate changes
 	for k, v := range newData {
@@ -131,9 +132,28 @@ func (c *Changeset) Update(newData url.Values, action string) {
 				c.Touched[k] = true
 			}
 		}
-		valid, errors := c.config.validator.Validate(c)
+		errors, valid, err := c.config.validator.Validate(c)
 		c.Valid = valid
 		c.Errors = errors
+		return err
 	}
+	return nil
+}
 
+// Value returns the value for the given key.
+func (c *Changeset) Value(key string) string {
+	return c.Values.Get(key)
+}
+
+// Error returns the error for the given key.
+func (c *Changeset) Error(key string) error {
+	if c == nil || c.Valid || c.Errors[key] == nil || !c.Touched[key] {
+		return nil
+	}
+	return c.Errors[key]
+}
+
+// HasError returns true if the given key has an error.
+func (c *Changeset) HasError(key string) bool {
+	return c.Error(key) != nil
 }

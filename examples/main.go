@@ -150,7 +150,11 @@ func (c *Counter) Mount(ctx context.Context, p live.Params) error {
 	if c.Count == 0 {
 		c.Count = 1
 	}
-	c.Changeset = cc.NewChangeset(nil, nil, "", new(Person))
+	cs, err := cc.NewChangeset(nil, nil, "", new(Person))
+	if err != nil {
+		return err
+	}
+	c.Changeset = cs
 	c.Ticks = 10
 	if c.ticker == nil {
 		c.ticker = time.NewTicker(time.Second)
@@ -191,7 +195,11 @@ func (c *Counter) HandleEvent(ctx context.Context, e *live.Event) error {
 			c.Last = p.Last
 			// clear the changeset
 			// TODO: nil, nil, etc.
-			c.Changeset = cc.NewChangeset(nil, nil, "", &Person{})
+			cs, err := cc.NewChangeset(nil, nil, "", &Person{})
+			if err != nil {
+				return err
+			}
+			c.Changeset = cs
 		}
 	case "redirect":
 		// redirect to the given path
