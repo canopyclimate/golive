@@ -60,10 +60,9 @@ func (c *Changeset) AsStruct() (any, error) {
 // will always return true for Valid. Passing a non-empty action will cause the
 // changeset to make the validation errors available if the struct is not valid.
 func (cc *Config) NewChangeset(old, new url.Values, action string, obj any) *Changeset {
-
 	c := &Changeset{
 		Action:     action,
-		Valid:      action == "", // default to true if no action, otherwise false
+		Valid:      action == "",
 		Errors:     make(map[string]any),
 		Changes:    make(map[string]any),
 		Touched:    make(map[string]bool),
@@ -72,36 +71,12 @@ func (cc *Config) NewChangeset(old, new url.Values, action string, obj any) *Cha
 		StructType: reflect.TypeOf(obj).Elem().Name(), // TODO better way?
 		config:     cc,
 	}
-	// merge old and new data
+	// initialize to old data
 	for k, v := range old {
 		c.Values[k] = v
 	}
-	for k, v := range new {
-		c.Values[k] = v
-	}
-
-	// validate changes
-	if action != "" {
-		// if we get a _target field, use it to indicate which fields were touched
-		// if not, assume all fields were touched
-		target := new.Get("_target")
-		if target != "" {
-			c.Touched[target] = true
-		} else {
-			for k := range new {
-				c.Touched[k] = true
-			}
-		}
-		valid, errors := c.config.validator.Validate(c)
-		c.Valid = valid
-		c.Errors = errors
-	}
-	// shallow diff to find changes
-	for k, v := range new {
-		if !slices.Equal(old[k], v) {
-			c.Changes[k] = v
-		}
-	}
+	// update to new data
+	c.Update(new, action)
 	return c
 }
 
@@ -110,8 +85,8 @@ func (cc *Config) NewChangeset(old, new url.Values, action string, obj any) *Cha
 // changeset to make the validation errors available if the struct is not valid.
 func (c *Changeset) Update(newData url.Values, action string) {
 	c.Action = action
-	c.Valid = action == ""
-	c.Errors = make(map[string]any)
+	c.Valid = action == ""          // default to true if no action, otherwise false
+	c.Errors = make(map[string]any) // TODO: once clear is in the language, use it here
 
 	// merge old and new data and calculate changes
 	for k, v := range newData {
@@ -123,6 +98,8 @@ func (c *Changeset) Update(newData url.Values, action string) {
 
 	// validate if action is not empty
 	if action != "" {
+		// if we get a _target field, use it to indicate which fields were touched
+		// if not, assume all fields were touched
 		target := newData.Get("_target")
 		if target != "" {
 			c.Touched[target] = true
@@ -135,5 +112,4 @@ func (c *Changeset) Update(newData url.Values, action string) {
 		c.Valid = valid
 		c.Errors = errors
 	}
-
 }
