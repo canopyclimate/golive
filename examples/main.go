@@ -154,7 +154,7 @@ func (c *Counter) Mount(ctx context.Context, p live.Params) error {
 		c.Count = 1
 	}
 	var err error
-	c.Changeset, err = cc.NewChangeset(new(Person))
+	c.Changeset, err = cc.NewChangeset(nil, new(Person))
 	if err != nil {
 		return err
 	}
@@ -207,7 +207,7 @@ func (c *Counter) HandleEvent(ctx context.Context, e *live.Event) error {
 			c.First = p.First
 			c.Last = p.Last
 			// clear the changeset
-			c.Changeset.Reset()
+			c.Changeset.Reset(nil)
 		}
 	case "redirect":
 		// redirect to the given path

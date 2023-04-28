@@ -17,27 +17,20 @@ type TestCase struct {
 	ExpectedErrorKeys []string
 }
 
-func TestNonPointerChangeset(t *testing.T) {
-	gv := NewGoPlaygroundChangesetConfig()
-	cc := Config{
-		Validator: gv,
-		Decoder:   gv,
-	}
+var gv = NewGoPlaygroundChangesetConfig()
+var cc = Config{
+	Validator: gv,
+	Decoder:   gv,
+}
 
-	_, err := cc.NewChangeset(Person{})
+func TestNonPointerChangeset(t *testing.T) {
+	_, err := cc.NewChangeset(nil, Person{})
 	if err == nil {
 		t.Error("Expected error when passing a non-pointer to NewChangeset")
 	}
 }
 
 func TestChangeset(t *testing.T) {
-
-	gv := NewGoPlaygroundChangesetConfig()
-	cc := Config{
-		Validator: gv,
-		Decoder:   gv,
-	}
-
 	// test changeset
 	for _, tc := range []TestCase{
 		{
@@ -83,7 +76,7 @@ func TestChangeset(t *testing.T) {
 		},
 	} {
 
-		cs, err := cc.NewChangeset(&Person{})
+		cs, err := cc.NewChangeset(nil, &Person{})
 		if err != nil {
 			t.Errorf("Unexpected error from NewChangeset: %s", err)
 		}
@@ -117,14 +110,7 @@ func TestChangeset(t *testing.T) {
 }
 
 func TestReset(t *testing.T) {
-	gv := NewGoPlaygroundChangesetConfig()
-	cc := Config{
-		Validator: gv,
-		Decoder:   gv,
-	}
-
-	// test changeset
-	cs, err := cc.NewChangeset(&Person{})
+	cs, err := cc.NewChangeset(nil, &Person{})
 	if err != nil {
 		t.Errorf("Unexpected error from NewChangeset: %s", err)
 	}
@@ -141,7 +127,7 @@ func TestReset(t *testing.T) {
 	}
 
 	// reset
-	cs.Reset()
+	cs.Reset(nil)
 
 	if !cs.Valid() {
 		t.Errorf("Expected Valid to be true, got %v", cs.Valid())
@@ -164,5 +150,103 @@ func TestReset(t *testing.T) {
 	}
 	if cs.Struct.(*Person).First != "fi" {
 		t.Errorf("Expected First to be set, got %s", cs.Struct.(*Person).First)
+	}
+}
+
+func expectValuesAndChanges(cs *Changeset, expectMatch bool, t *testing.T) {
+	diffLength := len(cs.Changes) != len(cs.Values)
+	if expectMatch && diffLength {
+		t.Errorf("Expected Changes and Values match=%v, got %d and %d", expectMatch, len(cs.Changes), len(cs.Values))
+	}
+	if !expectMatch && !diffLength {
+		t.Errorf("Expected Changes and Values match=%v, got %d and %d", expectMatch, len(cs.Changes), len(cs.Values))
+	}
+	for k, v := range cs.Changes {
+		if expectMatch && len(v) != len(cs.Values[k]) {
+			t.Errorf("Expected Changes to have same number of entries, got %v", cs.Changes)
+		}
+		for i, s := range v {
+			if s != cs.Values[k][i] {
+				t.Errorf("Expected matching entries for key %s, got %s and %s", k, s, cs.Values[k][i])
+			}
+		}
+	}
+}
+
+func TestChangesOnEmptyInit(t *testing.T) {
+	cs, err := cc.NewChangeset(nil, &Person{})
+	if err != nil {
+		t.Errorf("Unexpected error from NewChangeset: %s", err)
+	}
+	expectValuesAndChanges(cs, true, t)
+
+	cs.Update(url.Values{
+		"First": []string{"fi"},
+	}, "update")
+	expectValuesAndChanges(cs, true, t)
+
+	cs.Update(url.Values{
+		"First": []string{"firs"},
+	}, "update")
+	expectValuesAndChanges(cs, true, t)
+}
+
+func TestChangesOnNonEmptyInit(t *testing.T) {
+	cs, err := cc.NewChangeset(url.Values{
+		"First": []string{"firs"},
+		"Last":  []string{"last"},
+	}, &Person{})
+	if err != nil {
+		t.Errorf("Unexpected error from NewChangeset: %s", err)
+	}
+	expectValuesAndChanges(cs, false, t)
+
+	cs.Update(url.Values{
+		"First": []string{"f"},
+	}, "update")
+	expectValuesAndChanges(cs, false, t)
+
+	cs.Update(url.Values{
+		"First": []string{"fi"},
+	}, "update")
+	expectValuesAndChanges(cs, false, t)
+
+	cs.Update(url.Values{
+		"First": []string{"fir"},
+		"Last":  []string{"l"},
+	}, "update")
+	expectValuesAndChanges(cs, true, t)
+}
+
+func TestIsStructPtr(t *testing.T) {
+	_, err := cc.NewChangeset(nil, Person{})
+	if err == nil {
+		t.Errorf("Expected error from NewChangeset")
+	}
+
+	s := "not a struct ptr"
+	_, err = cc.NewChangeset(nil, &s)
+	if err == nil {
+		t.Errorf("Expected error from NewChangeset")
+	}
+}
+
+func TestInitial(t *testing.T) {
+	cs, err := cc.NewChangeset(nil, &Person{})
+	if err != nil {
+		t.Errorf("Unexpected error from NewChangeset: %s", err)
+	}
+	if cs.Initial != nil {
+		t.Errorf("Expected Init to be nil")
+	}
+	cs, err = cc.NewChangeset(url.Values{"First": []string{"firs"}}, &Person{})
+	if err != nil {
+		t.Errorf("Unexpected error from NewChangeset: %s", err)
+	}
+	if cs.Initial == nil {
+		t.Errorf("Expected Init to be non-nil")
+	}
+	if cs.Initial.Get("First") != "firs" {
+		t.Errorf("Expected Init to match, got %s", cs.Initial.Get("First"))
 	}
 }

@@ -33,7 +33,8 @@ type Config struct {
 // work with HTML form data in concert with the phx-change and phx-submit events.
 type Changeset struct {
 	Errors  map[string]error // map of field name to error message
-	Changes map[string]any   // map of field name that differs from the original value
+	Initial url.Values       // map of initial values
+	Changes url.Values       // map of field name that differs from the original value
 	Values  url.Values       // map of merged changes and original values
 	Struct  any              // pointer to struct to decode into
 
@@ -58,10 +59,8 @@ func (c *Changeset) Valid() bool {
 		return true
 	}
 	for k, v := range c.Errors {
-		if v != nil {
-			if c.touched != nil {
-				return !c.touched[k]
-			}
+		if v != nil && c.touched != nil {
+			return !c.touched[k]
 		}
 	}
 	return true
@@ -75,15 +74,17 @@ func (c *Changeset) AsStruct() (any, error) {
 }
 
 // NewChangeset returns a new Changeset based on the provided pointer to a struct.
-func (cc *Config) NewChangeset(obj any) (*Changeset, error) {
+func (cc *Config) NewChangeset(initial url.Values, obj any) (*Changeset, error) {
 	// we need a pointer to a struct to decode into
-	if reflect.TypeOf(obj).Kind() != reflect.Ptr {
+	if reflect.TypeOf(obj).Kind() != reflect.Ptr || reflect.TypeOf(obj).Elem().Kind() != reflect.Struct {
 		return nil, errors.New("changeset: obj must be pointer to struct")
 	}
 
 	c := &Changeset{
-		Struct: obj,
-		config: cc,
+		Initial: initial,
+		Values:  initial,
+		Struct:  obj,
+		config:  cc,
 	}
 	return c, nil
 }
@@ -103,7 +104,7 @@ func (c *Changeset) Update(newData url.Values, action string) error {
 	for k, v := range newData {
 		if !slices.Equal(c.Values[k], v) {
 			if c.Changes == nil {
-				c.Changes = make(map[string]any)
+				c.Changes = url.Values{}
 			}
 			c.Changes[k] = v
 		}
@@ -136,10 +137,11 @@ func (c *Changeset) Update(newData url.Values, action string) error {
 }
 
 // Reset resets the changeset to its initial state.
-func (c *Changeset) Reset() {
+func (c *Changeset) Reset(initial url.Values) {
 	c.Errors = nil
 	c.Changes = nil
-	c.Values = nil
+	c.Initial = initial
+	c.Values = initial
 	c.Struct = reflect.New(reflect.TypeOf(c.Struct).Elem()).Interface()
 
 	c.action = ""
