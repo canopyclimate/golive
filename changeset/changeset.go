@@ -1,18 +1,17 @@
 package changeset
 
 import (
-	"errors"
 	"net/url"
-	"reflect"
 
 	"golang.org/x/exp/slices"
 )
 
-// Validator validates a changeset and returns a map of field name to error message.
+// Validator validates url.Values for a give struct and returns a map of field name to error message.
 type Validator interface {
-	// Validate validates the changeset and returns a map of field name to errors
-	// or an error if there was a problem validating the changeset.
-	Validate(c *Changeset) (map[string]error, error)
+	// Validate validates that the provided URL value are valid for the given struct.
+	// It returns a map of field name to error message for each field that is invalid
+	// or an error if there was a general error validating.
+	Validate(any, url.Values) (map[string]error, error)
 }
 
 // Decoder decodes a url.Values into a struct.
@@ -31,21 +30,15 @@ type Config struct {
 // validating the struct. It provides a way to check if a given struct is valid
 // and if not a way to access the errors for each field. A changeset is meant to
 // work with HTML form data in concert with the phx-change and phx-submit events.
-type Changeset struct {
+type Changeset[T any] struct {
 	Errors  map[string]error // map of field name to error message
 	Initial url.Values       // map of initial values
 	Changes url.Values       // map of field name that differs from the original value
 	Values  url.Values       // map of merged changes and original values
-	Struct  any              // pointer to struct to decode into
 
 	action  string          // last update action; only run validations if action is not empty
 	touched map[string]bool // map of field names that were touched
 	config  *Config
-}
-
-// Type returns the name of the struct.
-func (c *Changeset) Type() string {
-	return reflect.TypeOf(c.Struct).Elem().Name()
 }
 
 // Valid returns true if the changeset is valid or false if it is not.
@@ -54,7 +47,7 @@ func (c *Changeset) Type() string {
 // If the action is empty, Valid will always return true.
 // If the action is not empty, Valid will return true if there are no errors
 // or if there are errors but the field was not touched.
-func (c *Changeset) Valid() bool {
+func (c *Changeset[T]) Valid() bool {
 	if c.action == "" {
 		return true
 	}
@@ -66,36 +59,29 @@ func (c *Changeset) Valid() bool {
 	return true
 }
 
-// AsStruct returns the changeset decoded into a struct or an error if there was a problem decoding.
-func (c *Changeset) AsStruct() (any, error) {
-	s := c.Struct
-	err := c.config.Decoder.Decode(s, c.Values)
-	return s, err
+// Struct returns the changeset Values decoded into a struct of T or an error if there was a problem decoding.
+func (c *Changeset[T]) Struct() (*T, error) {
+	t := new(T)
+	err := c.config.Decoder.Decode(t, c.Values)
+	return t, err
 }
 
-// NewChangeset returns a new Changeset based on the provided pointer to a struct.
-func (cc *Config) NewChangeset(initial url.Values, obj any) (*Changeset, error) {
-	// we need a pointer to a struct to decode into
-	if reflect.TypeOf(obj).Kind() != reflect.Ptr || reflect.TypeOf(obj).Elem().Kind() != reflect.Struct {
-		return nil, errors.New("changeset: obj must be pointer to struct")
-	}
-
-	c := &Changeset{
+// New returns a new Changeset of type T using the Config and initilizes the Changeset with the given initial values.
+func New[T any](cc *Config, initial url.Values) *Changeset[T] {
+	c := &Changeset[T]{
 		Initial: initial,
 		Values:  initial,
-		Struct:  obj,
 		config:  cc,
 	}
-	return c, nil
+	return c
 }
 
 // Update updates the changeset with new data and action. If action is empty, the changeset
 // will always return true for Valid(). Passing a non-empty action will cause the
 // changeset to run validations which may change the result of Valid() depending on
 // whether or not there are errors and whether or not the field was touched.
-func (c *Changeset) Update(newData url.Values, action string) error {
+func (c *Changeset[T]) Update(newData url.Values, action string) error {
 	c.action = action
-	// TODO should we call Reset() if newData is nil and action is empty?
 
 	// merge old and new data and calculate changes
 	if c.Values == nil {
@@ -126,7 +112,7 @@ func (c *Changeset) Update(newData url.Values, action string) error {
 				c.touched[k] = true
 			}
 		}
-		errors, err := c.config.Validator.Validate(c)
+		errors, err := c.config.Validator.Validate(new(T), c.Values)
 		if err != nil {
 			return err
 		}
@@ -136,25 +122,13 @@ func (c *Changeset) Update(newData url.Values, action string) error {
 	return nil
 }
 
-// Reset resets the changeset to its initial state.
-func (c *Changeset) Reset(initial url.Values) {
-	c.Errors = nil
-	c.Changes = nil
-	c.Initial = initial
-	c.Values = initial
-	c.Struct = reflect.New(reflect.TypeOf(c.Struct).Elem()).Interface()
-
-	c.action = ""
-	c.touched = nil
-}
-
 // Value returns the value for the given key.
-func (c *Changeset) Value(key string) string {
+func (c *Changeset[T]) Value(key string) string {
 	return c.Values.Get(key)
 }
 
 // Error returns the error for the given key.
-func (c *Changeset) Error(key string) error {
+func (c *Changeset[T]) Error(key string) error {
 	if c == nil || c.Valid() || c.Errors == nil || c.Errors[key] == nil || c.touched == nil || !c.touched[key] {
 		return nil
 	}
@@ -162,6 +136,6 @@ func (c *Changeset) Error(key string) error {
 }
 
 // HasError returns true if Error(key) returns a non-nil error
-func (c *Changeset) HasError(key string) bool {
+func (c *Changeset[T]) HasError(key string) bool {
 	return c.Error(key) != nil
 }

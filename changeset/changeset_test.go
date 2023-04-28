@@ -10,32 +10,25 @@ type Person struct {
 	Last  string `validate:"min=2"`
 }
 
-type TestCase struct {
-	Values            url.Values
-	Target            string
-	ExpectedValid     bool
-	ExpectedErrorKeys []string
-}
-
 var gv = NewGoPlaygroundChangesetConfig()
 var cc = Config{
 	Validator: gv,
 	Decoder:   gv,
 }
 
-func TestNonPointerChangeset(t *testing.T) {
-	_, err := cc.NewChangeset(nil, Person{})
-	if err == nil {
-		t.Error("Expected error when passing a non-pointer to NewChangeset")
-	}
-}
-
 func TestChangeset(t *testing.T) {
+	type TestCase struct {
+		Init              url.Values
+		Update            url.Values
+		Target            string
+		ExpectedValid     bool
+		ExpectedErrorKeys []string
+	}
 	// test changeset
-	for _, tc := range []TestCase{
+	for i, tc := range []TestCase{
 		{
 			// no target so touching all and both are invalid
-			Values: url.Values{
+			Update: url.Values{
 				"First": []string{"fi"},
 				"Last":  []string{""},
 			},
@@ -47,7 +40,7 @@ func TestChangeset(t *testing.T) {
 		},
 		{
 			// targeting last which is invalid
-			Values: url.Values{
+			Update: url.Values{
 				"First":   []string{"firs"},
 				"Last":    []string{"a"},
 				"_target": []string{"Last"},
@@ -59,7 +52,7 @@ func TestChangeset(t *testing.T) {
 		},
 		{
 			// targeting first which is valid
-			Values: url.Values{
+			Update: url.Values{
 				"First":   []string{"firs"},
 				"Last":    []string{""},
 				"_target": []string{"First"},
@@ -68,92 +61,66 @@ func TestChangeset(t *testing.T) {
 		},
 		{
 			// both valid inputs targeting all
-			Values: url.Values{
+			Update: url.Values{
 				"First": []string{"firs"},
 				"Last":  []string{"aa"},
 			},
 			ExpectedValid: true,
 		},
+		// go from valid init to invalid update
+		{
+			Init: url.Values{
+				"First": []string{"firs"},
+				"Last":  []string{"aa"},
+			},
+			Update: url.Values{
+				"First":   []string{"f"},
+				"Last":    []string{"aa"},
+				"_target": []string{"First"},
+			},
+			ExpectedValid: false,
+			ExpectedErrorKeys: []string{
+				"First",
+			},
+		},
 	} {
 
-		cs, err := cc.NewChangeset(nil, &Person{})
-		if err != nil {
-			t.Errorf("Unexpected error from NewChangeset: %s", err)
+		cs := New[Person](&cc, tc.Init)
+		if tc.Update != nil {
+			cs.Update(tc.Update, "update")
 		}
-		cs.Update(tc.Values, "update")
 
 		if tc.ExpectedValid != cs.Valid() {
-			t.Errorf("Expected Valid to be %v, got %v", tc.ExpectedValid, cs.Valid())
+			t.Errorf("Expected Valid to be %v, got %v in test case %d", tc.ExpectedValid, cs.Valid(), i)
 		}
 		if len(tc.ExpectedErrorKeys) > 0 {
 			for _, k := range tc.ExpectedErrorKeys {
 				if e := cs.Error(k); e == nil {
-					t.Errorf("Expected error key %s to be present", k)
+					t.Errorf("Expected error key %s to be present in test case %d", k, i)
 				}
 			}
 		}
-		for k, v := range tc.Values {
+		for k, v := range tc.Update {
 			if k != "_target" {
 				if cs.Value(k) != v[0] {
-					t.Errorf("Expected value for key %s to be %s, got %s", k, v[0], cs.Value(k))
+					t.Errorf("Expected value for key %s to be %s, got %s in test case %d", k, v[0], cs.Value(k), i)
 				}
 			}
 		}
-		s := cs.Struct.(*Person)
-		if s.First != tc.Values.Get("First") {
-			t.Errorf("Expected First to be %s, got %s", tc.Values.Get("First"), s.First)
+		s, err := cs.Struct()
+		if err != nil {
+			t.Errorf("Expected no error, got %v in test case %d", err, i)
 		}
-		if s.Last != tc.Values.Get("Last") {
-			t.Errorf("Expected Last to be %s, got %s", tc.Values.Get("Last"), s.Last)
+		if s.First != tc.Update.Get("First") {
+			t.Errorf("Expected First to be %s, got %s in test case %d", tc.Update.Get("First"), s.First, i)
+		}
+		if s.Last != tc.Update.Get("Last") {
+			t.Errorf("Expected Last to be %s, got %s in test case %d", tc.Update.Get("Last"), s.Last, i)
 		}
 	}
 }
 
-func TestReset(t *testing.T) {
-	cs, err := cc.NewChangeset(nil, &Person{})
-	if err != nil {
-		t.Errorf("Unexpected error from NewChangeset: %s", err)
-	}
-	cs.Update(url.Values{
-		"First": []string{"fi"},
-		"Last":  []string{"a"},
-	}, "update")
-
-	if cs.Valid() {
-		t.Errorf("Expected Valid to be false, got %v", cs.Valid())
-	}
-	if cs.Struct.(*Person).First != "fi" {
-		t.Errorf("Expected First to be set, got %s", cs.Struct.(*Person).First)
-	}
-
-	// reset
-	cs.Reset(nil)
-
-	if !cs.Valid() {
-		t.Errorf("Expected Valid to be true, got %v", cs.Valid())
-	}
-	s, err := cs.AsStruct()
-	if err != nil {
-		t.Errorf("Unexpected error from AsStruct: %s", err)
-	}
-	if s.(*Person).First != "" {
-		t.Errorf("Expected First to be empty, got %s", s.(*Person).First)
-	}
-
-	// update again
-	cs.Update(url.Values{
-		"First": []string{"fi"},
-		"Last":  []string{"a"},
-	}, "update")
-	if cs.Valid() {
-		t.Errorf("Expected Valid to be false, got %v", cs.Valid())
-	}
-	if cs.Struct.(*Person).First != "fi" {
-		t.Errorf("Expected First to be set, got %s", cs.Struct.(*Person).First)
-	}
-}
-
-func expectValuesAndChanges(cs *Changeset, expectMatch bool, t *testing.T) {
+func expectValuesAndChanges[T any](cs *Changeset[T], expectMatch bool, t *testing.T) {
 	diffLength := len(cs.Changes) != len(cs.Values)
 	if expectMatch && diffLength {
 		t.Errorf("Expected Changes and Values match=%v, got %d and %d", expectMatch, len(cs.Changes), len(cs.Values))
@@ -174,10 +141,7 @@ func expectValuesAndChanges(cs *Changeset, expectMatch bool, t *testing.T) {
 }
 
 func TestChangesOnEmptyInit(t *testing.T) {
-	cs, err := cc.NewChangeset(nil, &Person{})
-	if err != nil {
-		t.Errorf("Unexpected error from NewChangeset: %s", err)
-	}
+	cs := New[Person](&cc, nil)
 	expectValuesAndChanges(cs, true, t)
 
 	cs.Update(url.Values{
@@ -192,13 +156,10 @@ func TestChangesOnEmptyInit(t *testing.T) {
 }
 
 func TestChangesOnNonEmptyInit(t *testing.T) {
-	cs, err := cc.NewChangeset(url.Values{
+	cs := New[Person](&cc, url.Values{
 		"First": []string{"firs"},
 		"Last":  []string{"last"},
-	}, &Person{})
-	if err != nil {
-		t.Errorf("Unexpected error from NewChangeset: %s", err)
-	}
+	})
 	expectValuesAndChanges(cs, false, t)
 
 	cs.Update(url.Values{
@@ -218,35 +179,23 @@ func TestChangesOnNonEmptyInit(t *testing.T) {
 	expectValuesAndChanges(cs, true, t)
 }
 
-func TestIsStructPtr(t *testing.T) {
-	_, err := cc.NewChangeset(nil, Person{})
-	if err == nil {
-		t.Errorf("Expected error from NewChangeset")
-	}
-
-	s := "not a struct ptr"
-	_, err = cc.NewChangeset(nil, &s)
-	if err == nil {
-		t.Errorf("Expected error from NewChangeset")
-	}
-}
-
 func TestInitial(t *testing.T) {
-	cs, err := cc.NewChangeset(nil, &Person{})
-	if err != nil {
-		t.Errorf("Unexpected error from NewChangeset: %s", err)
-	}
+	cs := New[Person](&cc, nil)
 	if cs.Initial != nil {
 		t.Errorf("Expected Init to be nil")
 	}
-	cs, err = cc.NewChangeset(url.Values{"First": []string{"firs"}}, &Person{})
-	if err != nil {
-		t.Errorf("Unexpected error from NewChangeset: %s", err)
-	}
+	cs = New[Person](&cc, url.Values{"First": []string{"firs"}})
 	if cs.Initial == nil {
 		t.Errorf("Expected Init to be non-nil")
 	}
 	if cs.Initial.Get("First") != "firs" {
 		t.Errorf("Expected Init to match, got %s", cs.Initial.Get("First"))
+	}
+}
+
+func TestStruct(t *testing.T) {
+	cs := New[Person](&cc, nil)
+	if _, err := cs.Struct(); err != nil {
+		t.Errorf("Expected error to be nil, got %v", err)
 	}
 }

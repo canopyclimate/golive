@@ -11,8 +11,8 @@ import (
 //   - errorTag: renders an error tag if there is an error for the given key in the provided changeset
 func Funcs() htmltmpl.FuncMap {
 	return htmltmpl.FuncMap{
-		"inputTag": InputTag,
-		"errorTag": ErrorTag,
+		"inputTag": InputTag[any],
+		"errorTag": ErrorTag[any],
 	}
 }
 
@@ -26,7 +26,7 @@ var (
 )
 
 // InputTag renders an input tag with the given key and value for the provided changeset.
-func InputTag(cs *Changeset, key string) htmltmpl.HTML {
+func InputTag[T any](cs *Changeset[T], key string) htmltmpl.HTML {
 	val := cs.Value(key)
 	buf := new(strings.Builder)
 	dot := struct{ Key, Val string }{Key: key, Val: val}
@@ -38,7 +38,7 @@ func InputTag(cs *Changeset, key string) htmltmpl.HTML {
 }
 
 // ErrorTag renders an error tag if there is an error for the given key in the provided changeset.
-func ErrorTag(cs *Changeset, key string) htmltmpl.HTML {
+func ErrorTag[T any](cs *Changeset[T], key string) htmltmpl.HTML {
 	val := cs.Error(key)
 	buf := new(strings.Builder)
 	err := errorTagTmpl.Execute(buf, val)

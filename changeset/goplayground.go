@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"reflect"
 	"strings"
 
 	"github.com/go-playground/form"
@@ -80,18 +81,18 @@ func NewGoPlaygroundChangesetConfig() GoPlaygroundChangesetConfig {
 	}
 }
 
-// Validate runs decodes the URL values to the struct before running
-// the validations on the changeset returning a map of errors if validation
+// Validate decodes the URL values into the struct before running
+// the validations on it, returning a map of errors if validation
 // runs successfully or an error if decoding or validation fails.
-func (a GoPlaygroundChangesetConfig) Validate(c *Changeset) (map[string]error, error) {
+func (a GoPlaygroundChangesetConfig) Validate(ptr any, vals url.Values) (map[string]error, error) {
 
 	// decode first
-	if err := a.decoder.Decode(c.Struct, c.Values); err != nil {
+	if err := a.Decode(ptr, vals); err != nil {
 		return nil, err
 	}
 
 	// run validations
-	err := a.validator.Struct(c.Struct)
+	err := a.validator.Struct(ptr)
 	// if any errors, set Valid to false (which it should already be but doesn't hurt to be defensive)
 	if err == nil {
 		return nil, nil
@@ -102,7 +103,7 @@ func (a GoPlaygroundChangesetConfig) Validate(c *Changeset) (map[string]error, e
 	if _, ok := err.(validator.ValidationErrors); ok {
 		translatedErrors := err.(validator.ValidationErrors).Translate(a.translator)
 		// remove prefix from field name
-		prefix := c.Type() + "."
+		prefix := reflect.TypeOf(ptr).Elem().Name() + "."
 		for k, v := range translatedErrors {
 			trimmed := strings.TrimPrefix(k, prefix)
 			errMap[trimmed] = errors.New(v)
@@ -111,7 +112,7 @@ func (a GoPlaygroundChangesetConfig) Validate(c *Changeset) (map[string]error, e
 	return errMap, nil
 }
 
-// Decode decodes the URL values to the struct.
-func (a GoPlaygroundChangesetConfig) Decode(s any, v url.Values) error {
-	return a.decoder.Decode(s, v)
+// Decode decodes the URL values into the struct pointer.
+func (a GoPlaygroundChangesetConfig) Decode(ptr any, v url.Values) error {
+	return a.decoder.Decode(ptr, v)
 }

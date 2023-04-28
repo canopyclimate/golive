@@ -143,7 +143,7 @@ type Person struct {
 // TODO split this into different views instead of the amalgamation it is now.
 type Counter struct {
 	Count       int
-	Changeset   *changeset.Changeset
+	Changeset   *changeset.Changeset[Person]
 	First, Last string
 	Ticks       int
 	ticker      *time.Ticker
@@ -153,11 +153,7 @@ func (c *Counter) Mount(ctx context.Context, p live.Params) error {
 	if c.Count == 0 {
 		c.Count = 1
 	}
-	var err error
-	c.Changeset, err = cc.NewChangeset(nil, new(Person))
-	if err != nil {
-		return err
-	}
+	c.Changeset = changeset.New[Person](&cc, nil)
 	c.Ticks = 10
 	if c.ticker == nil {
 		c.ticker = time.NewTicker(time.Second)
@@ -199,15 +195,14 @@ func (c *Counter) HandleEvent(ctx context.Context, e *live.Event) error {
 		// if valid "Save" the data
 		if c.Changeset.Valid() {
 			// "Save" the data
-			s, err := c.Changeset.AsStruct()
+			p, err := c.Changeset.Struct()
 			if err != nil {
 				return err
 			}
-			p := s.(*Person)
 			c.First = p.First
 			c.Last = p.Last
 			// clear the changeset
-			c.Changeset.Reset(nil)
+			c.Changeset = changeset.New[Person](&cc, nil)
 		}
 	case "redirect":
 		// redirect to the given path
