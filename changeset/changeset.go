@@ -2,6 +2,7 @@ package changeset
 
 import (
 	"net/url"
+	"reflect"
 
 	"golang.org/x/exp/slices"
 )
@@ -30,12 +31,13 @@ type Config struct {
 // validating the struct. It provides a way to check if a given struct is valid
 // and if not a way to access the errors for each field. A changeset is meant to
 // work with HTML form data in concert with the phx-change and phx-submit events.
-type Changeset[T any] struct {
+type Changeset struct {
 	Errors  map[string]error // map of field name to error message
 	Initial url.Values       // map of initial values
 	Changes url.Values       // map of field name that differs from the original value
 	Values  url.Values       // map of merged changes and original values
 
+	ptr     any             // pointer to struct type for changeset
 	action  string          // last update action; only run validations if action is not empty
 	touched map[string]bool // map of field names that were touched
 	config  *Config
@@ -47,7 +49,7 @@ type Changeset[T any] struct {
 // If the action is empty, Valid will always return true.
 // If the action is not empty, Valid will return true if there are no errors
 // or if there are errors but the field was not touched.
-func (c *Changeset[T]) Valid() bool {
+func (c *Changeset) Valid() bool {
 	if c.action == "" {
 		return true
 	}
@@ -60,17 +62,19 @@ func (c *Changeset[T]) Valid() bool {
 }
 
 // Struct returns the changeset Values decoded into a struct of T or an error if there was a problem decoding.
-func (c *Changeset[T]) Struct() (*T, error) {
-	t := new(T)
+func (c *Changeset) Struct() (any, error) {
+	t := reflect.New(reflect.TypeOf(c.ptr).Elem()).Interface()
 	err := c.config.Decoder.Decode(t, c.Values)
 	return t, err
 }
 
 // New returns a new Changeset of type T using the Config and initilizes the Changeset with the given initial values.
-func New[T any](cc *Config, initial url.Values) *Changeset[T] {
-	c := &Changeset[T]{
+func New[T any](cc *Config, initial url.Values) *Changeset {
+	s := reflect.New(reflect.TypeOf(new(T)).Elem()).Interface()
+	c := &Changeset{
 		Initial: initial,
 		Values:  initial,
+		ptr:     s,
 		config:  cc,
 	}
 	return c
@@ -80,7 +84,7 @@ func New[T any](cc *Config, initial url.Values) *Changeset[T] {
 // will always return true for Valid(). Passing a non-empty action will cause the
 // changeset to run validations which may change the result of Valid() depending on
 // whether or not there are errors and whether or not the field was touched.
-func (c *Changeset[T]) Update(newData url.Values, action string) error {
+func (c *Changeset) Update(newData url.Values, action string) error {
 	c.action = action
 
 	// merge old and new data and calculate changes
@@ -112,7 +116,8 @@ func (c *Changeset[T]) Update(newData url.Values, action string) error {
 				c.touched[k] = true
 			}
 		}
-		errors, err := c.config.Validator.Validate(new(T), c.Values)
+		t := reflect.New(reflect.TypeOf(c.ptr).Elem()).Interface()
+		errors, err := c.config.Validator.Validate(t, c.Values)
 		if err != nil {
 			return err
 		}
@@ -123,12 +128,12 @@ func (c *Changeset[T]) Update(newData url.Values, action string) error {
 }
 
 // Value returns the value for the given key.
-func (c *Changeset[T]) Value(key string) string {
+func (c *Changeset) Value(key string) string {
 	return c.Values.Get(key)
 }
 
 // Error returns the error for the given key.
-func (c *Changeset[T]) Error(key string) error {
+func (c *Changeset) Error(key string) error {
 	if c == nil || c.Valid() || c.Errors == nil || c.Errors[key] == nil || c.touched == nil || !c.touched[key] {
 		return nil
 	}
@@ -136,6 +141,6 @@ func (c *Changeset[T]) Error(key string) error {
 }
 
 // HasError returns true if Error(key) returns a non-nil error
-func (c *Changeset[T]) HasError(key string) bool {
+func (c *Changeset) HasError(key string) bool {
 	return c.Error(key) != nil
 }

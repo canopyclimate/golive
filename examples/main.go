@@ -113,6 +113,9 @@ func init() {
 	for k, v := range live.Funcs() {
 		myFuncs[k] = v
 	}
+	for k, v := range changeset.Funcs() {
+		myFuncs[k] = v
+	}
 }
 
 // loadTemplate loads a template from the given path, adding the provided FuncMaps.
@@ -140,7 +143,7 @@ type Person struct {
 // TODO split this into different views instead of the amalgamation it is now.
 type Counter struct {
 	Count       int
-	Changeset   *changeset.Changeset[Person]
+	Changeset   *changeset.Changeset
 	First, Last string
 	Ticks       int
 	ticker      *time.Ticker
@@ -192,10 +195,11 @@ func (c *Counter) HandleEvent(ctx context.Context, e *live.Event) error {
 		// if valid "Save" the data
 		if c.Changeset.Valid() {
 			// "Save" the data
-			p, err := c.Changeset.Struct()
+			s, err := c.Changeset.Struct()
 			if err != nil {
 				return err
 			}
+			p := s.(*Person)
 			c.First = p.First
 			c.Last = p.Last
 			// clear the changeset
@@ -213,7 +217,15 @@ func (c *Counter) HandleEvent(ctx context.Context, e *live.Event) error {
 }
 
 func (c *Counter) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl.Template) {
-	return c, htmltmpl.Must(htmltmpl.New("liveView").Funcs(myFuncs).Funcs(changeset.Funcs[Person]()).Parse(`
+	return c, htmltmpl.Must(htmltmpl.New("liveView").Funcs(myFuncs).Parse(`
+			{{ define "inputTag" }}
+				<input type="text" name="{{ .Name }}" value="{{ .Changeset.Value .Name }}"/>
+			{{ end }}
+			{{ define "errorTag" }}
+				{{ if .Changeset.HasError .Name}}
+					<span class="error">{{ .Changeset.Error .Name }}</span>
+				{{ end }}
+			{{ end }}
 			<div>
 				Go to Nav: {{ liveNav "navigate" "/nav" (dict "" "") "Nav" }}
 				<h1>Count is: {{ .Count }}</h1>
@@ -222,11 +234,11 @@ func (c *Counter) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl.T
 			</div>
 			{{ foo}}
 			<form phx-submit="submit" phx-change="change">
-				First {{ inputTag .Changeset "First" }}
-				{{ errorTag .Changeset "First" }}
+				First {{ template "inputTag" dict "Changeset" .Changeset "Name" "First" }}
+				{{ template "errorTag" dict "Changeset" .Changeset "Name" "First" }}
 				<br />
-				Last {{ inputTag .Changeset "Last" }}
-				{{ errorTag .Changeset "Last" }}
+				First {{ template "inputTag" dict "Changeset" .Changeset "Name" "Last" }}
+				{{ template "errorTag" dict "Changeset" .Changeset "Name" "Last" }}
 				<br />
 				<input type="submit" value="Submit" />
 			</form>

@@ -111,16 +111,17 @@ func TestChangeset(t *testing.T) {
 		if err != nil {
 			t.Errorf("Expected no error, got %v in test case %d", err, i)
 		}
-		if s.First != tc.Update.Get("First") {
-			t.Errorf("Expected First to be %s, got %s in test case %d", tc.Update.Get("First"), s.First, i)
+		p := s.(*Person)
+		if p.First != tc.Update.Get("First") {
+			t.Errorf("Expected First to be %s, got %s in test case %d", tc.Update.Get("First"), p.First, i)
 		}
-		if s.Last != tc.Update.Get("Last") {
-			t.Errorf("Expected Last to be %s, got %s in test case %d", tc.Update.Get("Last"), s.Last, i)
+		if p.Last != tc.Update.Get("Last") {
+			t.Errorf("Expected Last to be %s, got %s in test case %d", tc.Update.Get("Last"), p.Last, i)
 		}
 	}
 }
 
-func expectValuesAndChanges[T any](cs *Changeset[T], expectMatch bool, t *testing.T) {
+func expectValuesAndChanges(cs *Changeset, expectMatch bool, t *testing.T) {
 	diffLength := len(cs.Changes) != len(cs.Values)
 	if expectMatch && diffLength {
 		t.Errorf("Expected Changes and Values match=%v, got %d and %d", expectMatch, len(cs.Changes), len(cs.Values))
