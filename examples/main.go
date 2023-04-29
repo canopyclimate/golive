@@ -113,9 +113,6 @@ func init() {
 	for k, v := range live.Funcs() {
 		myFuncs[k] = v
 	}
-	for k, v := range changeset.Funcs() {
-		myFuncs[k] = v
-	}
 }
 
 // loadTemplate loads a template from the given path, adding the provided FuncMaps.
@@ -216,7 +213,7 @@ func (c *Counter) HandleEvent(ctx context.Context, e *live.Event) error {
 }
 
 func (c *Counter) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl.Template) {
-	return c, htmltmpl.Must(htmltmpl.New("liveView").Funcs(myFuncs).Parse(`
+	return c, htmltmpl.Must(htmltmpl.New("liveView").Funcs(myFuncs).Funcs(changeset.Funcs[Person]()).Parse(`
 			<div>
 				Go to Nav: {{ liveNav "navigate" "/nav" (dict "" "") "Nav" }}
 				<h1>Count is: {{ .Count }}</h1>

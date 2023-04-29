@@ -9,10 +9,10 @@ import (
 // Funcs returns a map of functions that can be used in templates:
 //   - inputTag: renders an input tag with the given key and value for the provided changeset
 //   - errorTag: renders an error tag if there is an error for the given key in the provided changeset
-func Funcs() htmltmpl.FuncMap {
+func Funcs[T any]() htmltmpl.FuncMap {
 	return htmltmpl.FuncMap{
-		"inputTag": InputTag[any],
-		"errorTag": ErrorTag[any],
+		"inputTag": InputTag[T],
+		"errorTag": ErrorTag[T],
 	}
 }
 
