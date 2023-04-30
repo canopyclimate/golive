@@ -27,7 +27,7 @@ var (
 
 // InputTag renders an input tag with the given key and value for the provided changeset.
 func InputTag(cs *Changeset, key string) htmltmpl.HTML {
-	val := cs.Values.Get(key)
+	val := cs.Value(key)
 	buf := new(strings.Builder)
 	dot := struct{ Key, Val string }{Key: key, Val: val}
 	err := inputTagTmpl.Execute(buf, dot)
@@ -39,11 +39,9 @@ func InputTag(cs *Changeset, key string) htmltmpl.HTML {
 
 // ErrorTag renders an error tag if there is an error for the given key in the provided changeset.
 func ErrorTag(cs *Changeset, key string) htmltmpl.HTML {
-	if cs == nil || cs.Valid || cs.Errors[key] == nil || !cs.Touched[key] {
-		return ""
-	}
+	val := cs.Error(key)
 	buf := new(strings.Builder)
-	err := errorTagTmpl.Execute(buf, cs.Errors[key])
+	err := errorTagTmpl.Execute(buf, val)
 	if err != nil {
 		panic(err)
 	}
