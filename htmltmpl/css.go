@@ -210,8 +210,10 @@ var cssReplacementTable = []string{
 	'}':  `\7d`,
 }
 
-var expressionBytes = []byte("expression")
-var mozBindingBytes = []byte("mozbinding")
+var (
+	expressionBytes = []byte("expression")
+	mozBindingBytes = []byte("mozbinding")
+)
 
 // cssValueFilter allows innocuous CSS values in the output including CSS
 // quantities (10px or 25%), ID or class literals (#foo, .bar), keyword values
@@ -238,7 +240,7 @@ func cssValueFilter(args ...any) string {
 	// inside a string that might embed JavaScript source.
 	for i, c := range b {
 		switch c {
-		case 0, '"', '\'', '(', ')', '/', ';', '@', '[', '\\', ']', '`', '{', '}':
+		case 0, '"', '\'', '(', ')', '/', ';', '@', '[', '\\', ']', '`', '{', '}', '<', '>':
 			return filterFailsafe
 		case '-':
 			// Disallow <!-- or -->.
