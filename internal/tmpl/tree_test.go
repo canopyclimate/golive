@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"io"
 	"math/rand"
+	"net/url"
 	"testing"
 	"unicode/utf8"
 
 	"github.com/canopyclimate/golive/htmltmpl"
 	"github.com/canopyclimate/golive/internal/tmpl"
+	"github.com/canopyclimate/golive/live"
 	"github.com/josharian/tstruct"
 )
 
@@ -198,6 +200,47 @@ func TestRangeTemplateSerialization(t *testing.T) {
 	got := buf.String()
 	if want != got {
 		t.Fatalf("got \n%q want \n%q", got, want)
+	}
+}
+
+func TestEvents(t *testing.T) {
+	root := tmpl.NewTree()
+	tree := root
+	tree.AppendDynamic("abc")
+	tree.AppendStatic("def")
+	tree = tree.AppendSub()
+	tree.AppendStatic("xyz")
+	vals := url.Values{}
+	vals.Add("foo", "bar")
+	vals.Add("baz", "qux")
+	vals.Add("baz", "quv")
+	evt := live.Event{
+		Type: "some_event",
+		Data: vals,
+	}
+	j, err := evt.MarshalJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	j2, err := (&live.Event{
+		Type: "another_event",
+		Data: url.Values{
+			"biz": []string{"buz"},
+		},
+	}).MarshalJSON()
+	root.Events = [][]byte{j, j2}
+	buf := new(bytes.Buffer)
+	n, err := root.WriteTo(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != int64(buf.Len()) {
+		t.Fatalf("wrote %d but tracked %d", buf.Len(), n)
+	}
+	const want = `{"0":"abc","1":"xyz","s":["","def",""],"e":[["some_event",{"baz":["qux","quv"],"foo":"bar"}],["another_event",{"biz":"buz"}]]}`
+	got := buf.String()
+	if want != got {
+		t.Fatalf("got %q want %q", got, want)
 	}
 }
 

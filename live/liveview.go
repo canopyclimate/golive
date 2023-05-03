@@ -316,6 +316,7 @@ type socket struct {
 	info              chan *Info
 	upload            chan *phx.UploadMsg
 	nav               chan *phx.Nav
+	events            []*Event
 	readerr           chan error
 	title             string
 	url               url.URL
@@ -748,6 +749,17 @@ func (s *socket) renderToTree(ctx context.Context) (*tmpl.Tree, error) {
 		tree.Title = s.title
 		s.title = ""
 	}
+	// add events to tree if there are any
+	if len(s.events) > 0 {
+		for _, e := range s.events {
+			rawJson, err := e.MarshalJSON()
+			if err != nil {
+				return nil, err
+			}
+			tree.Events = append(tree.Events, rawJson)
+		}
+		s.events = nil
+	}
 	return tree, err
 }
 
@@ -755,6 +767,24 @@ func (s *socket) renderToTree(ctx context.Context) (*tmpl.Tree, error) {
 type Event struct {
 	Type string
 	Data url.Values
+}
+
+// MarshalJSON implements json.Marshaler for Event
+func (e *Event) MarshalJSON() ([]byte, error) {
+	// if a key is multi-valued, send it as an array
+	// otherwise send it as a single value
+	vals := make(map[string]any)
+	for k, v := range e.Data {
+		if len(v) == 1 {
+			vals[k] = v[0]
+		} else {
+			vals[k] = v
+		}
+	}
+	return json.Marshal([]any{
+		e.Type,
+		vals,
+	})
 }
 
 // Info is internal event data from the server
@@ -836,6 +866,17 @@ func Redirect(ctx context.Context, url *url.URL) error {
 		return nil
 	}
 	s.redirect = url.String()
+	return nil
+}
+
+// PushEvent sends an event to the View which a Hook can respond to
+func PushEvent(ctx context.Context, e Event) error {
+	s := socketValue(ctx)
+	if s == nil {
+		return nil
+	}
+	// queue event to be sent to view
+	s.events = append(s.events, &e)
 	return nil
 }
 
