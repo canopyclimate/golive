@@ -50,6 +50,9 @@ func main() {
 	lr.HandleFunc("/modal", func(w http.ResponseWriter, r *http.Request) {
 		live.SetView(r, new(ModalDemo))
 	})
+	lr.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
+		live.SetView(r, new(Ping))
+	})
 
 	liveConfig := live.Config{
 		Mux: lr,
@@ -342,6 +345,30 @@ func (v *MoreEvents) Render(ctx context.Context, meta *live.Meta) (any, *htmltmp
 					<br />
 					Input is {{ if not .Focused}}not{{end}} focused
 				</div>
+			</div>
+		`))
+}
+
+// Example of server push events
+type Ping struct {
+}
+
+func (v *Ping) HandleEvent(ctx context.Context, e *live.Event) error {
+	if e.Type == "ping" {
+		vals := url.Values{}
+		vals.Set("pushed", "true")
+		live.PushEvent(ctx, live.Event{Type: "pong", Data: vals})
+	}
+	return nil
+}
+
+func (v *Ping) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl.Template) {
+	return v, htmltmpl.Must(htmltmpl.New("liveView").Funcs(myFuncs).Parse(`
+			<div>
+				{{/*TODO fix support for templates without "dynamics"*/}}
+				{{ $foo := "foo" }}
+				{{ $foo }}
+        <button phx-click="ping">Ping</button>          			
 			</div>
 		`))
 }

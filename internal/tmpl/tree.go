@@ -14,6 +14,7 @@ type Tree struct {
 	Dynamics       []any // string | *Tree | []any
 	ExcludeStatics bool  // controls if MarshalText Statics with serializing
 	Title          string
+	Events         [][]byte
 	isRange        bool
 	rangeStep      int
 }
@@ -122,6 +123,7 @@ var (
 	quoteColon   = []byte(`":`)
 	startStatics = []byte(`,"s":[`)
 	startTitle   = []byte(`,"t":`)
+	startEvents  = []byte(`,"e":[`)
 )
 
 // JSON returns a JSON representation of the tree.
@@ -305,6 +307,25 @@ func (t *Tree) WriteTo(w io.Writer) (written int64, err error) {
 			return written, err
 		}
 		if err := writeJSONString(t.Title); err != nil {
+			return written, err
+		}
+	}
+	// write events tree part if not empty
+	if len(t.Events) > 0 {
+		if err := writeBytes(startEvents); err != nil {
+			return written, err
+		}
+		for i, e := range t.Events {
+			if i > 0 {
+				if err := writeByte(','); err != nil {
+					return written, err
+				}
+			}
+			if err := writeBytes(e); err != nil {
+				return written, err
+			}
+		}
+		if err := writeByte(']'); err != nil {
 			return written, err
 		}
 	}
