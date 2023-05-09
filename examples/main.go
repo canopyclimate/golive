@@ -53,12 +53,18 @@ func main() {
 	lr.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		live.SetView(r, new(Ping))
 	})
+	lr.HandleFunc("/err", func(w http.ResponseWriter, r *http.Request) {
+		live.SetView(r, new(ErrView))
+	})
 
 	liveConfig := live.Config{
 		Mux: lr,
 		RenderLayout: func(w http.ResponseWriter, r *http.Request, lvd *live.LayoutDot) (any, *htmltmpl.Template) {
 			lvd.PageTitle.Prefix = "GoLive - "
 			return lvd, loadTemplate("./examples/layout.gohtml", myFuncs)
+		},
+		OnViewError: func(ctx context.Context, v live.View, url *url.URL, err error) {
+			log.Printf("View Error: view=%v, url=%v, err=%v\n", v, url, err)
 		},
 	}
 	// setup static route
@@ -498,4 +504,39 @@ func (m *ModalDemo) Mount(ctx context.Context, p live.Params) error {
 
 func (m *ModalDemo) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl.Template) {
 	return m, loadTemplate("./examples/modal.gohtml", myFuncs)
+}
+
+// View that throws errors
+type ErrView struct {
+}
+
+func (v *ErrView) HandleEvent(ctx context.Context, e *live.Event) error {
+	switch e.Type {
+	case "event_error":
+		return errors.New("event error")
+	case "info_error":
+		go live.SendInfo(ctx, &live.Info{Type: "info_error"})
+	}
+	return nil
+}
+
+func (v *ErrView) HandleInfo(ctx context.Context, e *live.Info) error {
+	return errors.New("info error")
+}
+
+func (v *ErrView) HandleParams(ctx context.Context, url *url.URL) error {
+	if url.Query().Get("Error") == "true" {
+		return errors.New("params error")
+	}
+	return nil
+}
+
+func (v *ErrView) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl.Template) {
+	return v, htmltmpl.Must(htmltmpl.New("liveView").Funcs(myFuncs).Parse(`
+			<div id="error">
+        <button phx-click="event_error">HandleEvent Error</button>
+				<button phx-click="info_error">HandleInfo Error</button>
+				{{ liveNav "patch" "/err" (dict "Error" "true") "HandleParams Error" }}
+			</div>
+		`))
 }

@@ -48,6 +48,12 @@ type Nav struct {
 	Payload NavPayload
 }
 
+type Error struct {
+	JoinRef string
+	MsgRef  string
+	Topic   string
+}
+
 type Heartbeat struct {
 	Reply
 	Payload
@@ -174,6 +180,14 @@ func NewNav(topic, event string, p NavPayload) *Nav {
 	}
 }
 
+func NewError(joinRef string, msgRef string, topic string) *Error {
+	return &Error{
+		JoinRef: joinRef,
+		MsgRef:  msgRef,
+		Topic:   topic,
+	}
+}
+
 func (m *Reply) JSON() ([]byte, error) {
 	return json.Marshal(m)
 }
@@ -196,4 +210,8 @@ func (n *Nav) JSON() ([]byte, error) {
 
 func (n *Nav) MarshalJSON() ([]byte, error) {
 	return json.Marshal([]any{n.JoinRef, n.MsgRef, n.Topic, n.Event, n.Payload})
+}
+
+func (e *Error) MarshalJSON() ([]byte, error) {
+	return json.Marshal([]any{e.JoinRef, e.MsgRef, e.Topic, "phx_error", json.RawMessage("{}")})
 }

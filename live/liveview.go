@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -36,6 +35,12 @@ type Config struct {
 	//  - Pass the LayoutDot to the liveViewContainerTag (i.e. {{ liveViewContainerTag .LayoutDot }})
 	//  - Set the CSRF token in a meta tag (i.e. <meta name="csrf-token" content="{{ .LayoutDot.CSRFToken }}">)
 	RenderLayout func(http.ResponseWriter, *http.Request, *LayoutDot) (any, *htmltmpl.Template)
+	// OnViewError is called when an error occurs during a View lifecycle method (e.g. HandleEvent, HandleInfo, etc)
+	// AND the view is connected to a socket (as opposed to the initial HTTP request). If nil, the error is not logged.
+	// In any case, the javascript client will receive a "phx_error" message via the connected socket which in the case
+	// of `HandleEvent` and `HandleInfo` will result in the client attempting to re-join the View.  For `HandleParams`,
+	// the error will result in a page reload which will start the HTTP request lifecycle over again.
+	OnViewError func(ctx context.Context, v View, url *url.URL, err error)
 }
 
 type liveViewRequestContextKey struct{}
@@ -276,29 +281,41 @@ func (s *socket) serve(ctx context.Context) {
 		select {
 		case info := <-s.info:
 			r, err = s.handleInfo(ctx, info)
-			res = append(res, r)
+			if r != nil {
+				res = append(res, r)
+			}
 		case pm := <-s.msg:
 			r, err = s.dispatch(ctx, pm)
-			res = append(res, r)
+			if r != nil {
+				res = append(res, r)
+			}
 		case um := <-s.upload:
 			res, err = s.handleUpload(ctx, um)
 		case nm := <-s.nav:
 			r, err = nm.JSON()
-			res = append(res, r)
+			if r != nil {
+				res = append(res, r)
+			}
 		case err := <-s.readerr:
 			// TODO: what?
 			fmt.Printf("websocket read failed: %v\n", err)
 			return
 		}
 		if err != nil {
-			fmt.Println("error:", err)
-			panic("TODO: what?")
+			// call configured error handler if set
+			if s.config.OnViewError != nil {
+				s.config.OnViewError(ctx, s.view, &s.url, err)
+			}
+			// send "phx_error" message to client
+			b, err := json.Marshal(phx.NewError(s.joinRef, s.msgRef, s.id))
+			if err != nil {
+				panic(err) // theoretically should never happen
+			}
+			res = append(res, b)
 		}
 		for _, m := range res {
 			err = s.conn.WriteMessage(websocket.TextMessage, m)
 			if err != nil {
-				// TODO: what? the client has disconnected, so we should probably just hang up
-				log.Println(err)
 				return
 			}
 		}
@@ -311,7 +328,9 @@ type socket struct {
 	conn              *websocket.Conn
 	config            Config
 	view              View
-	id                string
+	id                string // aka join topic
+	joinRef           string // initial join ref
+	msgRef            string // initial message ref
 	msg               chan *phx.Msg
 	info              chan *Info
 	upload            chan *phx.UploadMsg
@@ -384,6 +403,8 @@ func (s *socket) dispatch(ctx context.Context, msg *phx.Msg) ([]byte, error) {
 			}
 
 			s.id = msg.Topic
+			s.joinRef = msg.JoinRef
+			s.msgRef = msg.MsgRef
 			s.url = *url
 			s.csrfToken = params.CSRFToken
 
