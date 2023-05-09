@@ -53,6 +53,9 @@ func main() {
 	lr.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		live.SetView(r, new(Ping))
 	})
+	lr.HandleFunc("/error", func(w http.ResponseWriter, r *http.Request) {
+		live.SetView(r, new(HandleErrorsView))
+	})
 
 	liveConfig := live.Config{
 		Mux: lr,
@@ -498,4 +501,36 @@ func (m *ModalDemo) Mount(ctx context.Context, p live.Params) error {
 
 func (m *ModalDemo) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl.Template) {
 	return m, loadTemplate("./examples/modal.gohtml", myFuncs)
+}
+
+type HandleErrorsView struct {
+	Error error
+}
+
+func (v *HandleErrorsView) HandleEvent(ctx context.Context, e *live.Event) error {
+	switch e.Type {
+	case "error":
+		return errors.New("some error")
+	case "clear":
+		v.Error = nil
+	}
+	return nil
+}
+
+func (v *HandleErrorsView) HandleError(ctx context.Context, err error) error {
+	v.Error = err
+	return nil
+}
+
+func (v *HandleErrorsView) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl.Template) {
+	return v, htmltmpl.Must(htmltmpl.New("liveView").Funcs(myFuncs).Parse(`
+			<div>
+				{{ if .Error }}
+				  An error occurred: {{ .Error }}
+				{{ end }}
+				<br />				
+        <button phx-click="error">Create Error</button>
+				<button phx-click="clear">Clear Error</button>
+			</div>
+		`))
 }

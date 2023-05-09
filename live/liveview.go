@@ -196,6 +196,12 @@ type InfoHandler interface {
 	HandleInfo(context.Context, *Info) error
 }
 
+// ErrorHandler is an interface that can be implemented by a View to be notified
+// when errors occur during the lifecycle of a view.
+type ErrorHandler interface {
+	HandleError(context.Context, error) error
+}
+
 // PageTitleConfgurer is an interface that can be implemented by a View to
 // configure the liveTitleTag template function.
 type PageTitleConfigurer interface {
@@ -291,8 +297,12 @@ func (s *socket) serve(ctx context.Context) {
 			return
 		}
 		if err != nil {
-			fmt.Println("error:", err)
-			panic("TODO: what?")
+			r, err = s.handleError(ctx, err)
+			res = append(res, r)
+			if err != nil {
+				// TODO: can't really do anything here, so just panic?
+				panic(err)
+			}
 		}
 		for _, m := range res {
 			err = s.conn.WriteMessage(websocket.TextMessage, m)
@@ -657,6 +667,30 @@ func (s *socket) handleInfo(ctx context.Context, info *Info) ([]byte, error) {
 		return nil, fmt.Errorf("view does not implement InfoHandler")
 	}
 	err := ih.HandleInfo(ctx, info)
+	if err != nil {
+		return nil, err
+	}
+	t, err := s.renderToTree(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("rendering error: %v", err)
+	}
+	diff, err := t.JSON()
+	if err != nil {
+		return nil, err
+	}
+	return phx.NewDiff(nil, s.id, diff).JSON()
+}
+
+// handleError checks if the view implements the ErrorHandler interface
+// and if so, calls HandleError() on the view. If the view does not implement
+// the ErrorHandler interface, the error is returned unchanged.  Any errors
+// returned from HandleError or during post-HandleError is bubbled up to caller.
+func (s *socket) handleError(ctx context.Context, err error) ([]byte, error) {
+	eh, ok := s.view.(ErrorHandler)
+	if !ok {
+		return nil, err
+	}
+	err = eh.HandleError(ctx, err)
 	if err != nil {
 		return nil, err
 	}
