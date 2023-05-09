@@ -806,8 +806,8 @@ func SendInfo(ctx context.Context, info *Info) {
 	if s == nil {
 		return
 	}
-	// TODO should we do this in a goroutine?
-	s.info <- info
+	// don't block when sending info
+	go func() { s.info <- info }()
 }
 
 // PageTitle updates the page title for the View

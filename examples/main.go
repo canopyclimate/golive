@@ -353,12 +353,24 @@ func (v *MoreEvents) Render(ctx context.Context, meta *live.Meta) (any, *htmltmp
 type Ping struct {
 }
 
+func (v *Ping) pong(ctx context.Context) {
+	vals := url.Values{}
+	vals.Set("pushed", "true")
+	live.PushEvent(ctx, live.Event{Type: "pong", Data: vals})
+}
+
 func (v *Ping) HandleEvent(ctx context.Context, e *live.Event) error {
 	if e.Type == "ping" {
-		vals := url.Values{}
-		vals.Set("pushed", "true")
-		live.PushEvent(ctx, live.Event{Type: "pong", Data: vals})
+		v.pong(ctx)
 	}
+	if e.Type == "info_ping" {
+		live.SendInfo(ctx, &live.Info{Type: "info_ping"})
+	}
+	return nil
+}
+
+func (v *Ping) HandleInfo(ctx context.Context, info *live.Info) error {
+	v.pong(ctx)
 	return nil
 }
 
@@ -367,8 +379,8 @@ func (v *Ping) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl.Temp
 			<div>
 				{{/*TODO fix support for templates without "dynamics"*/}}
 				{{ $foo := "foo" }}
-				{{ $foo }}
-        <button phx-click="ping">Ping</button>          			
+        <button phx-click="ping">Ping</button>
+				<button phx-click="info_ping">Info Ping</button>     			
 			</div>
 		`))
 }
