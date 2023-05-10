@@ -45,11 +45,13 @@ type Config struct {
 	OnViewError func(ctx context.Context, v View, url *url.URL, err error)
 }
 
-type liveViewRequestContextKey struct{}
-type liveViewContainer struct {
-	lv View
-	r  *http.Request
-}
+type (
+	liveViewRequestContextKey struct{}
+	liveViewContainer         struct {
+		lv View
+		r  *http.Request
+	}
+)
 
 func (c *Config) viewForRequest(w http.ResponseWriter, r *http.Request, currentView View) (View, int, *http.Request) {
 	container := &liveViewContainer{
@@ -674,13 +676,11 @@ func (s *socket) dispatch(ctx context.Context, msg *phx.Msg) ([]byte, error) {
 		return phx.NewReplyDiff(*msg, diff).JSON()
 	}
 	return nil, fmt.Errorf("unknown event: %s", event)
-
 }
 
 // handleInfo receives internal messages then runs: HandleInfo => Render
 // on the View before sending a diff back to the client
 func (s *socket) handleInfo(ctx context.Context, info *Info) ([]byte, error) {
-
 	ih, ok := s.view.(InfoHandler)
 	if !ok {
 		return nil, fmt.Errorf("view does not implement InfoHandler")
@@ -733,11 +733,11 @@ func (s *socket) handleUpload(ctx context.Context, up *phx.UploadMsg) (res [][]b
 
 	// save the data to a temp file
 	tdir := filepath.Join(os.TempDir(), fmt.Sprintf("golive-%s", s.activeUploadRef))
-	err = os.MkdirAll(tdir, 0777)
+	err = os.MkdirAll(tdir, 0o777)
 	if err != nil {
 		return res, err
 	}
-	file, err := os.OpenFile(filepath.Join(tdir, entry.UUID), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+	file, err := os.OpenFile(filepath.Join(tdir, entry.UUID), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o644)
 	if err != nil {
 		return res, err
 	}

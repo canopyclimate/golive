@@ -121,5 +121,4 @@ func TestPushCmd(t *testing.T) {
 	}
 
 	runCases(t, cases)
-
 }

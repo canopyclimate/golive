@@ -136,11 +136,13 @@ func loadTemplate(path string, funcs htmltmpl.FuncMap) *htmltmpl.Template {
 
 // use a GoPlayground-based changeset to validate the form input
 // and convert it to a struct
-var ga = changeset.NewGoPlaygroundChangesetConfig()
-var cc = changeset.Config{
-	Validator: ga,
-	Decoder:   ga,
-}
+var (
+	ga = changeset.NewGoPlaygroundChangesetConfig()
+	cc = changeset.Config{
+		Validator: ga,
+		Decoder:   ga,
+	}
+)
 
 // Person is the struct that we will validate using form input and changesets
 type Person struct {
@@ -356,8 +358,7 @@ func (v *MoreEvents) Render(ctx context.Context, meta *live.Meta) (any, *htmltmp
 }
 
 // Example of server push events
-type Ping struct {
-}
+type Ping struct{}
 
 func (v *Ping) HandleEvent(ctx context.Context, e *live.Event) error {
 	if e.Type == "ping" {
@@ -418,7 +419,6 @@ func (lv *MyPhotos) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl
 }
 
 func (lv *MyPhotos) HandleEvent(ctx context.Context, e *live.Event) error {
-
 	switch e.Type {
 	case "cancel":
 		ref := e.Data.Get("ref")
@@ -460,9 +460,9 @@ func (lv *MyPhotos) HandleEvent(ctx context.Context, e *live.Event) error {
 			}
 			loc := fmt.Sprintf("%s%s", entry.UUID, exts[0])
 			publicImg := filepath.Join(".", "public", "img")
-			try.E(os.MkdirAll(publicImg, 0777))
+			try.E(os.MkdirAll(publicImg, 0o777))
 			dest := filepath.Join(publicImg, loc)
-			err = os.WriteFile(dest, input, 0644)
+			err = os.WriteFile(dest, input, 0o644)
 			if err != nil {
 				panic(err)
 			}
@@ -507,8 +507,7 @@ func (m *ModalDemo) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl
 }
 
 // View that throws errors
-type ErrView struct {
-}
+type ErrView struct{}
 
 func (v *ErrView) HandleEvent(ctx context.Context, e *live.Event) error {
 	switch e.Type {

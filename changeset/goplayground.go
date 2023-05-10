@@ -27,7 +27,6 @@ type GoPlaygroundChangesetConfig struct {
 // implementation to show how one can use different decoder and validator
 // libraries with the changeset package.
 func NewGoPlaygroundChangesetConfig() GoPlaygroundChangesetConfig {
-
 	decoder := form.NewDecoder()
 	v := validator.New()
 	en := en.New()
@@ -85,7 +84,6 @@ func NewGoPlaygroundChangesetConfig() GoPlaygroundChangesetConfig {
 // the validations on it, returning a map of errors if validation
 // runs successfully or an error if decoding or validation fails.
 func (a GoPlaygroundChangesetConfig) Validate(ptr any, vals url.Values) (map[string]error, error) {
-
 	// decode first
 	if err := a.Decode(ptr, vals); err != nil {
 		return nil, err

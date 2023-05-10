@@ -10,11 +10,13 @@ type Person struct {
 	Last  string `validate:"min=2"`
 }
 
-var gv = NewGoPlaygroundChangesetConfig()
-var cc = Config{
-	Validator: gv,
-	Decoder:   gv,
-}
+var (
+	gv = NewGoPlaygroundChangesetConfig()
+	cc = Config{
+		Validator: gv,
+		Decoder:   gv,
+	}
+)
 
 func TestChangeset(t *testing.T) {
 	type TestCase struct {
