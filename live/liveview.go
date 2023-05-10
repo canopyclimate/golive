@@ -36,8 +36,9 @@ type Config struct {
 	//  - Set the CSRF token in a meta tag (i.e. <meta name="csrf-token" content="{{ .LayoutDot.CSRFToken }}">)
 	RenderLayout func(http.ResponseWriter, *http.Request, *LayoutDot) (any, *htmltmpl.Template)
 	// OnViewError is called when an error occurs during a View lifecycle method (e.g. HandleEvent, HandleInfo, etc)
-	// AND the view is connected to a socket (as opposed to the initial HTTP request). If nil, the error is not logged.
-	// In any case, the javascript client will receive a "phx_error" message via the connected socket which in the case
+	// AND the view is connected to a socket (as opposed to the initial HTTP request). OnViewError may be nil
+	// in which case the error is not logged or handled in any way.  Regardless of whether OnViewError is non-nil,
+	// the javascript client will receive a "phx_error" message via the connected socket which in the case
 	// of `HandleEvent` and `HandleInfo` will result in the client attempting to re-join the View.  For `HandleParams`,
 	// the error will result in a page reload which will start the HTTP request lifecycle over again.
 	OnViewError func(ctx context.Context, v View, url *url.URL, err error)
@@ -281,19 +282,19 @@ func (s *socket) serve(ctx context.Context) {
 		select {
 		case info := <-s.info:
 			r, err = s.handleInfo(ctx, info)
-			if r != nil {
+			if err == nil {
 				res = append(res, r)
 			}
 		case pm := <-s.msg:
 			r, err = s.dispatch(ctx, pm)
-			if r != nil {
+			if err == nil {
 				res = append(res, r)
 			}
 		case um := <-s.upload:
 			res, err = s.handleUpload(ctx, um)
 		case nm := <-s.nav:
 			r, err = nm.JSON()
-			if r != nil {
+			if err == nil {
 				res = append(res, r)
 			}
 		case err := <-s.readerr:
