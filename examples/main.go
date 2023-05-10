@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"embed"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"math"
 	"mime"
@@ -20,6 +22,9 @@ import (
 	"github.com/dsnet/try"
 	"github.com/gorilla/mux"
 )
+
+//go:embed *.gohtml
+var htmlFS embed.FS
 
 func main() {
 	r := mux.NewRouter()
@@ -61,7 +66,7 @@ func main() {
 		Mux: lr,
 		RenderLayout: func(w http.ResponseWriter, r *http.Request, lvd *live.LayoutDot) (any, *htmltmpl.Template) {
 			lvd.PageTitle.Prefix = "GoLive - "
-			return lvd, loadTemplate("./examples/layout.gohtml", myFuncs)
+			return lvd, loadTemplate("layout.gohtml", myFuncs)
 		},
 		OnViewError: func(ctx context.Context, v live.View, url *url.URL, err error) {
 			log.Printf("View Error: view=%v, url=%v, err=%v\n", v, url, err)
@@ -129,9 +134,13 @@ func init() {
 
 // loadTemplate loads a template from the given path, adding the provided FuncMaps.
 func loadTemplate(path string, funcs htmltmpl.FuncMap) *htmltmpl.Template {
+	buf, err := fs.ReadFile(htmlFS, path)
+	if err != nil {
+		panic(path + " not found")
+	}
 	name := filepath.Base(path)
 	tmpl := htmltmpl.New(name).Funcs(funcs)
-	return htmltmpl.Must(tmpl.ParseFiles(path))
+	return htmltmpl.Must(tmpl.Parse(string(buf)))
 }
 
 // use a GoPlayground-based changeset to validate the form input
@@ -296,7 +305,7 @@ func (n *Nav) HandleParams(ctx context.Context, url *url.URL) error {
 }
 
 func (n *Nav) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl.Template) {
-	return n, loadTemplate("./examples/nav.gohtml", myFuncs)
+	return n, loadTemplate("nav.gohtml", myFuncs)
 }
 
 func (n *Nav) PageTitleConfig() live.PageTitleConfig {
@@ -415,7 +424,7 @@ func (lv *MyPhotos) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl
 		MyPhotos:     lv,
 		UploadPhotos: meta.Uploads[uploadName],
 	}
-	return dot, loadTemplate("./examples/photos.gohtml", myFuncs)
+	return dot, loadTemplate("photos.gohtml", myFuncs)
 }
 
 func (lv *MyPhotos) HandleEvent(ctx context.Context, e *live.Event) error {
@@ -503,7 +512,7 @@ func (m *ModalDemo) Mount(ctx context.Context, p live.Params) error {
 }
 
 func (m *ModalDemo) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl.Template) {
-	return m, loadTemplate("./examples/modal.gohtml", myFuncs)
+	return m, loadTemplate("modal.gohtml", myFuncs)
 }
 
 // View that throws errors
