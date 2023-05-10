@@ -12,7 +12,6 @@ import (
 
 // A file and related metadata selected for upload
 type UploadEntry struct {
-
 	// Whether the file selection has been cancelled. Defaults to false.
 	Cancelled bool
 
@@ -44,7 +43,7 @@ type UploadEntry struct {
 	UploadRef string
 
 	// A uuid for the file
-	UUID string //uuid.UUID
+	UUID string // uuid.UUID
 
 	// True if there are no errors with the file. Defaults to true.
 	Valid bool

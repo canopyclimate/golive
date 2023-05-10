@@ -10,7 +10,6 @@ import (
 )
 
 func TestHeartbeat(t *testing.T) {
-
 	msgRef := "1"
 	hb := fmt.Sprintf(`[null,%q,"phoenix","phx_reply",{"response":{},"status":"ok"}]`, msgRef)
 
@@ -24,11 +23,9 @@ func TestHeartbeat(t *testing.T) {
 	if hb != string(b) {
 		t.Fatalf("got \n%q want \n%q", string(b), hb)
 	}
-
 }
 
 func TestRendered(t *testing.T) {
-
 	msg := Msg{
 		JoinRef: "4",
 		MsgRef:  "4",
@@ -48,11 +45,9 @@ func TestRendered(t *testing.T) {
 	if res != string(b) {
 		t.Fatalf("got \n\n%q want \n\n%q", string(b), res)
 	}
-
 }
 
 func TestReplyDiff(t *testing.T) {
-
 	msg := Msg{
 		JoinRef: "4",
 		MsgRef:  "4",
@@ -72,11 +67,9 @@ func TestReplyDiff(t *testing.T) {
 	if res != string(b) {
 		t.Fatalf("got \n\n%q want \n\n%q", string(b), res)
 	}
-
 }
 
 func TestUploadReplyDiff(t *testing.T) {
-
 	msg := Msg{
 		JoinRef: "4",
 		MsgRef:  "4",
@@ -133,11 +126,9 @@ func TestUploadReplyDiff(t *testing.T) {
 	if res != string(b) {
 		t.Fatalf("got \n\n%q want \n\n%q", string(b), res)
 	}
-
 }
 
 func TestDiff(t *testing.T) {
-
 	topic := "lv:phx-asfdasdfa"
 
 	diff := []byte(`{"0":"phx-879983f9-81be-4b7a-89b8-e59d7d76bbc9"}`)
@@ -153,11 +144,9 @@ func TestDiff(t *testing.T) {
 	if res != string(b) {
 		t.Fatalf("got \n\n%q want \n\n%q", string(b), res)
 	}
-
 }
 
 func TestEmptyReply(t *testing.T) {
-
 	msg := Msg{
 		JoinRef: "4",
 		MsgRef:  "4",
@@ -176,5 +165,4 @@ func TestEmptyReply(t *testing.T) {
 	if res != string(b) {
 		t.Fatalf("got \n\n%q want \n\n%q", string(b), res)
 	}
-
 }
