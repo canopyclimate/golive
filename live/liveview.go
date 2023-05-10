@@ -14,6 +14,7 @@ import (
 	"github.com/canopyclimate/golive/htmltmpl"
 	"github.com/canopyclimate/golive/internal/tmpl"
 	"github.com/canopyclimate/golive/live/internal/phx"
+	"golang.org/x/time/rate"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -231,15 +232,16 @@ func (x *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close() // TODO: is this right? probably...?
 	s := &socket{
-		req:           r,
-		conn:          conn,
-		config:        x.config,
-		readerr:       make(chan error),
-		msg:           make(chan *phx.Msg),
-		info:          make(chan *Info),
-		upload:        make(chan *phx.UploadMsg),
-		nav:           make(chan *phx.Nav),
-		uploadConfigs: make(map[string]*UploadConfig),
+		req:            r,
+		conn:           conn,
+		config:         x.config,
+		readerr:        make(chan error),
+		msg:            make(chan *phx.Msg),
+		info:           make(chan *Info),
+		upload:         make(chan *phx.UploadMsg),
+		nav:            make(chan *phx.Nav),
+		uploadConfigs:  make(map[string]*UploadConfig),
+		errTokenBucket: rate.NewLimiter(rate.Limit(1/15.0), 3), // at most one event per 15s on average, but 3 initial retries free
 	}
 	go s.read()
 	s.serve(r.Context())
@@ -307,6 +309,10 @@ func (s *socket) serve(ctx context.Context) {
 			if s.config.OnViewError != nil {
 				s.config.OnViewError(ctx, s.view, &s.url, err)
 			}
+			// Rate limit error responses. This prevents retries from overwhelming the server.
+			// It would be better for the client to have some kind of graceful backoff,
+			// but we don't control the client.
+			s.errTokenBucket.Wait(ctx)
 			// send "phx_error" message to client
 			b, err := json.Marshal(phx.NewError(s.joinRef, s.msgRef, s.id))
 			if err != nil {
@@ -345,6 +351,7 @@ type socket struct {
 	uploadConfigs     map[string]*UploadConfig
 	activeUploadRef   string
 	activeUploadTopic string
+	errTokenBucket    *rate.Limiter
 }
 
 func (s *socket) dispatch(ctx context.Context, msg *phx.Msg) ([]byte, error) {
