@@ -16,6 +16,7 @@ require (
 )
 
 require (
+	github.com/evanw/esbuild v0.17.18 // indirect
 	github.com/josharian/tstruct v0.3.0 // indirect
 	github.com/leodido/go-urn v1.2.1 // indirect
 	golang.org/x/crypto v0.5.0 // indirect
