@@ -202,3 +202,80 @@ func TestStruct(t *testing.T) {
 		t.Errorf("Expected error to be nil, got %v", err)
 	}
 }
+
+type FormWithBool struct {
+	Flag bool
+}
+
+func TestBoolUnset(t *testing.T) {
+	cs := New[FormWithBool](&cc, url.Values{})
+	form, err := cs.Struct()
+	if err != nil {
+		t.Errorf("Expected error to be nil, got %v", err)
+	}
+	if form.(*FormWithBool).Flag {
+		t.Errorf("Expected Flag to be false, got %v", true)
+	}
+
+	cs.Update(url.Values{
+		"Flag": []string{"on"},
+	}, "update")
+
+	form, err = cs.Struct()
+	if err != nil {
+		t.Errorf("Expected error to be nil, got %v", err)
+	}
+	if !form.(*FormWithBool).Flag {
+		t.Errorf("Expected Flag to be true, got %v", false)
+	}
+
+	cs.Update(url.Values{
+		"_target": []string{"Flag"},
+	}, "update")
+
+	form, err = cs.Struct()
+	if err != nil {
+		t.Errorf("Expected error to be nil, got %v", err)
+	}
+	if form.(*FormWithBool).Flag {
+		t.Errorf("Expected Flag to be false, got %v", true)
+	}
+}
+
+func TestBoolSet(t *testing.T) {
+	cs := New[FormWithBool](&cc, url.Values{
+		"Flag": []string{"on"},
+	})
+
+	form, err := cs.Struct()
+	if err != nil {
+		t.Errorf("Expected error to be nil, got %v", err)
+	}
+	if !form.(*FormWithBool).Flag {
+		t.Errorf("Expected Flag to be true, got %v", false)
+	}
+
+	cs.Update(url.Values{
+		"_target": []string{"Flag"},
+	}, "update")
+
+	form, err = cs.Struct()
+	if err != nil {
+		t.Errorf("Expected error to be nil, got %v", err)
+	}
+	if form.(*FormWithBool).Flag {
+		t.Errorf("Expected Flag to be false, got %v", true)
+	}
+
+	cs.Update(url.Values{
+		"Flag": []string{"on"},
+	}, "update")
+
+	form, err = cs.Struct()
+	if err != nil {
+		t.Errorf("Expected error to be nil, got %v", err)
+	}
+	if !form.(*FormWithBool).Flag {
+		t.Errorf("Expected Flag to be true, got %v", false)
+	}
+}
