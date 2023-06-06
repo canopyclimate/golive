@@ -53,13 +53,27 @@ func (c *Changeset) Valid() bool {
 	if c.action == "" {
 		return true
 	}
-	for k, v := range c.Errors {
-		if v != nil && c.touched != nil {
-			return !c.touched[k]
+	// if nothing was touched the changeset is valid
+	// regardless of whether or not there are errors
+	// otherwise, only check for errors on touched fields
+	// and return false if there are any errors
+	for k, touched := range c.touched {
+		if touched && c.Errors[k] != nil {
+			return false
 		}
 	}
 	return true
 }
+
+// if nothing was touched the changeset is valid
+// regardless of whether or not there are errors
+// otherwise, only check for errors on touched fields
+// and return false if there are any errors
+// for k, touched := range c.touched {
+// 	if touched && c.Errors[k] != nil {
+// 		return false
+// 	}
+// }
 
 // Struct returns the changeset Values decoded into a struct of T or an error if there was a problem decoding.
 func (c *Changeset) Struct() (any, error) {
@@ -146,8 +160,10 @@ func (c *Changeset) Value(key string) string {
 // Error returns the error for the given key.
 func (c *Changeset) Error(key string) error {
 	if c == nil || c.Valid() || c.Errors == nil || c.Errors[key] == nil || c.touched == nil || !c.touched[key] {
+		// fmt.Println("returning nil for key", key, c == nil, c.Valid(), c.Errors == nil, c.Errors[key] == nil, c.touched == nil, !c.touched[key])
 		return nil
 	}
+	// fmt.Println("returning error", c.Errors[key])
 	return c.Errors[key]
 }
 
