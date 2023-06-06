@@ -87,10 +87,12 @@ func New[T any](cc *Config, initial url.Values) *Changeset {
 func (c *Changeset) Update(newData url.Values, action string) error {
 	c.action = action
 
-	// merge old and new data and calculate changes
+	// initialize Values if nil
 	if c.Values == nil {
 		c.Values = url.Values{}
 	}
+
+	// merge old and new data and calculate changes
 	for k, v := range newData {
 		if !slices.Equal(c.Values[k], v) {
 			if c.Changes == nil {
@@ -100,6 +102,16 @@ func (c *Changeset) Update(newData url.Values, action string) error {
 		}
 		c.Values[k] = v
 	}
+	// handle case where _target is set but the newData does not contain the _target field
+	// this happens in the case of a checkbox that is unchecked
+	target := newData.Get("_target")
+	if target != "" && newData.Get(target) == "" {
+		c.Values.Del(target)
+		if c.Changes == nil {
+			c.Changes = url.Values{}
+		}
+		c.Changes[target] = []string{""}
+	}
 
 	// validate if action is not empty
 	if action != "" {
@@ -108,7 +120,6 @@ func (c *Changeset) Update(newData url.Values, action string) error {
 		if c.touched == nil {
 			c.touched = make(map[string]bool)
 		}
-		target := newData.Get("_target")
 		if target != "" {
 			c.touched[target] = true
 		} else {
