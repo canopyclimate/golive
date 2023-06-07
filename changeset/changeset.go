@@ -65,16 +65,6 @@ func (c *Changeset) Valid() bool {
 	return true
 }
 
-// if nothing was touched the changeset is valid
-// regardless of whether or not there are errors
-// otherwise, only check for errors on touched fields
-// and return false if there are any errors
-// for k, touched := range c.touched {
-// 	if touched && c.Errors[k] != nil {
-// 		return false
-// 	}
-// }
-
 // Struct returns the changeset Values decoded into a struct of T or an error if there was a problem decoding.
 func (c *Changeset) Struct() (any, error) {
 	t := reflect.New(reflect.TypeOf(c.ptr).Elem()).Interface()
