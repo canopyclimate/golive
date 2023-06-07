@@ -182,6 +182,28 @@ func TestChangesOnNonEmptyInit(t *testing.T) {
 	expectValuesAndChanges(cs, true, t)
 }
 
+func TestDeterministicValidity(t *testing.T) {
+	cs := New[Person](&cc, nil)
+	if !cs.Valid() {
+		t.Errorf("Expected Valid to be true")
+	}
+	// kind of hacky, but ran into issue ranging over map of Errors
+	// being non-deterministic causing cs.Valid() to return true
+	// when it should have been false - switched the implementation
+	// of Valid() but kept this test anyway
+	for i := 0; i < 10000; i++ {
+		cs.Update(url.Values{
+			"First":   []string{"fi"},
+			"Last":    []string{""},
+			"_target": []string{"First"},
+		}, "update")
+		if cs.Valid() {
+			t.Errorf("Expected Valid to be false")
+			break
+		}
+	}
+}
+
 func TestInitial(t *testing.T) {
 	cs := New[Person](&cc, nil)
 	if cs.Initial != nil {

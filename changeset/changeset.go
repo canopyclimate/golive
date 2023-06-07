@@ -53,9 +53,13 @@ func (c *Changeset) Valid() bool {
 	if c.action == "" {
 		return true
 	}
-	for k, v := range c.Errors {
-		if v != nil && c.touched != nil {
-			return !c.touched[k]
+	// if nothing was touched the changeset is valid
+	// regardless of whether or not there are errors
+	// otherwise, only check for errors on touched fields
+	// and return false if there are any errors
+	for k, touched := range c.touched {
+		if touched && c.Errors[k] != nil {
+			return false
 		}
 	}
 	return true
