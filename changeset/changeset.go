@@ -160,7 +160,6 @@ func (c *Changeset) Value(key string) string {
 // Error returns the error for the given key.
 func (c *Changeset) Error(key string) error {
 	if c == nil || c.Valid() || c.Errors == nil || c.Errors[key] == nil || c.touched == nil || !c.touched[key] {
-		// fmt.Println("returning nil for key", key, c == nil, c.Valid(), c.Errors == nil, c.Errors[key] == nil, c.touched == nil, !c.touched[key])
 		return nil
 	}
 	// fmt.Println("returning error", c.Errors[key])
