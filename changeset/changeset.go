@@ -119,25 +119,29 @@ func (c *Changeset) Update(newData url.Values, action string) error {
 
 	// validate if action is not empty
 	if action != "" {
-		// if we get a _target field, use it to indicate which fields were touched
-		// if not, assume all fields were touched
-		if c.touched == nil {
-			c.touched = make(map[string]bool)
-		}
-		if target != "" {
-			c.touched[target] = true
-		} else {
-			for k := range newData {
-				c.touched[k] = true
-			}
-		}
 		t := reflect.New(reflect.TypeOf(c.ptr).Elem()).Interface()
-		errors, err := c.config.Validator.Validate(t, c.Values)
+		var err error
+		c.Errors, err = c.config.Validator.Validate(t, c.Values)
 		if err != nil {
 			return err
 		}
 
-		c.Errors = errors
+		if c.touched == nil {
+			c.touched = make(map[string]bool)
+		}
+		// if we get a _target field in the form, use it to indicate which fields were touched
+		// if not, assume all fields in input were touched and all fields
+		// with errors were touched
+		if target != "" {
+			c.touched[target] = true
+		} else {
+			for d := range newData {
+				c.touched[d] = true
+			}
+			for k := range c.Errors {
+				c.touched[k] = true
+			}
+		}
 	}
 	return nil
 }
