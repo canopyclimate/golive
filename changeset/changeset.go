@@ -50,9 +50,11 @@ type Changeset struct {
 // If the action is not empty, Valid will return true if there are no errors
 // or if there are errors but the field was not touched.
 func (c *Changeset) Valid() bool {
-	if c.action == "" {
+	// blank action or nil Errors means valid
+	if c.action == "" || c.Errors == nil {
 		return true
 	}
+
 	// if nothing was touched the changeset is valid
 	// regardless of whether or not there are errors
 	// otherwise, only check for errors on touched fields
@@ -148,12 +150,15 @@ func (c *Changeset) Update(newData url.Values, action string) error {
 
 // Value returns the value for the given key.
 func (c *Changeset) Value(key string) string {
+	if c == nil || c.Values == nil {
+		return ""
+	}
 	return c.Values.Get(key)
 }
 
 // Error returns the error for the given key.
 func (c *Changeset) Error(key string) error {
-	if c == nil || c.Valid() || c.Errors == nil || c.Errors[key] == nil || c.touched == nil || !c.touched[key] {
+	if c == nil || c.Errors == nil || c.Errors[key] == nil || c.touched == nil || !c.touched[key] || c.Valid() {
 		return nil
 	}
 	return c.Errors[key]
@@ -162,4 +167,16 @@ func (c *Changeset) Error(key string) error {
 // HasError returns true if Error(key) returns a non-nil error
 func (c *Changeset) HasError(key string) bool {
 	return c.Error(key) != nil
+}
+
+// AddError adds an error for the given key and marks the field as touched.
+func (c *Changeset) AddError(key string, err error) {
+	if c.Errors == nil {
+		c.Errors = make(map[string]error)
+	}
+	c.Errors[key] = err
+	if c.touched == nil {
+		c.touched = make(map[string]bool)
+	}
+	c.touched[key] = true
 }
