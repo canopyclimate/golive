@@ -109,11 +109,10 @@ func TestChangeset(t *testing.T) {
 				}
 			}
 		}
-		s, err := cs.Struct()
+		p, err := cs.Struct()
 		if err != nil {
 			t.Errorf("Expected no error, got %v in test case %d", err, i)
 		}
-		p := s.(*Person)
 		if p.First != tc.Update.Get("First") {
 			t.Errorf("Expected First to be %s, got %s in test case %d", tc.Update.Get("First"), p.First, i)
 		}
@@ -123,7 +122,7 @@ func TestChangeset(t *testing.T) {
 	}
 }
 
-func expectValuesAndChanges(cs *Changeset, expectMatch bool, t *testing.T) {
+func expectValuesAndChanges[T any](cs *Changeset[T], expectMatch bool, t *testing.T) {
 	diffLength := len(cs.Changes) != len(cs.Values)
 	if expectMatch && diffLength {
 		t.Errorf("Expected Changes and Values match=%v, got %d and %d", expectMatch, len(cs.Changes), len(cs.Values))
@@ -235,7 +234,7 @@ func TestBoolUnset(t *testing.T) {
 	if err != nil {
 		t.Errorf("Expected error to be nil, got %v", err)
 	}
-	if form.(*FormWithBool).Flag {
+	if form.Flag {
 		t.Errorf("Expected Flag to be false, got %v", true)
 	}
 
@@ -247,7 +246,7 @@ func TestBoolUnset(t *testing.T) {
 	if err != nil {
 		t.Errorf("Expected error to be nil, got %v", err)
 	}
-	if !form.(*FormWithBool).Flag {
+	if !form.Flag {
 		t.Errorf("Expected Flag to be true, got %v", false)
 	}
 
@@ -259,7 +258,7 @@ func TestBoolUnset(t *testing.T) {
 	if err != nil {
 		t.Errorf("Expected error to be nil, got %v", err)
 	}
-	if form.(*FormWithBool).Flag {
+	if form.Flag {
 		t.Errorf("Expected Flag to be false, got %v", true)
 	}
 }
@@ -273,7 +272,7 @@ func TestBoolSet(t *testing.T) {
 	if err != nil {
 		t.Errorf("Expected error to be nil, got %v", err)
 	}
-	if !form.(*FormWithBool).Flag {
+	if !form.Flag {
 		t.Errorf("Expected Flag to be true, got %v", false)
 	}
 
@@ -285,7 +284,7 @@ func TestBoolSet(t *testing.T) {
 	if err != nil {
 		t.Errorf("Expected error to be nil, got %v", err)
 	}
-	if form.(*FormWithBool).Flag {
+	if form.Flag {
 		t.Errorf("Expected Flag to be false, got %v", true)
 	}
 
@@ -297,7 +296,7 @@ func TestBoolSet(t *testing.T) {
 	if err != nil {
 		t.Errorf("Expected error to be nil, got %v", err)
 	}
-	if !form.(*FormWithBool).Flag {
+	if !form.Flag {
 		t.Errorf("Expected Flag to be true, got %v", false)
 	}
 }
