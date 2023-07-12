@@ -127,6 +127,9 @@ func init() {
 	for k, v := range live.Funcs() {
 		myFuncs[k] = v
 	}
+	for k, v := range changeset.Funcs() {
+		myFuncs[k] = v
+	}
 }
 
 // loadTemplate loads a template from the given path, adding the provided FuncMaps.
@@ -233,15 +236,8 @@ func (c *Counter) HandleEvent(ctx context.Context, e *live.Event) error {
 }
 
 func (c *Counter) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl.Template) {
-	funcs := htmltmpl.FuncMap{
-		"inputTag": func(key string) htmltmpl.HTML {
-			return changeset.InputTag[Person](c.Changeset, key)
-		},
-		"errorTag": func(key string) htmltmpl.HTML {
-			return changeset.ErrorTag[Person](c.Changeset, key)
-		},
-	}
-	return c, htmltmpl.Must(htmltmpl.New("liveView").Funcs(myFuncs).Funcs(funcs).Parse(`			
+
+	return c, htmltmpl.Must(htmltmpl.New("liveView").Funcs(myFuncs).Parse(`			
 			<div>
 				Go to Nav: {{ liveNav "navigate" "/nav" (dict "" "") "Nav" }}
 				<h1>Count is: {{ .Count }}</h1>
@@ -251,12 +247,12 @@ func (c *Counter) Render(ctx context.Context, meta *live.Meta) (any, *htmltmpl.T
 			{{ foo}}
 			<form phx-submit="submit" phx-change="change">
 				First 
-				{{ inputTag "First" }}
-				{{ errorTag "First" }}
+				{{ inputTag .Changeset "First" }}
+				{{ errorTag .Changeset "First" }}
 				<br />
 				Last 
-				{{ inputTag "Last" }}
-				{{ errorTag "Last" }}
+				{{ inputTag .Changeset "Last" }}
+				{{ errorTag .Changeset "Last" }}
 				<br />
 				<input type="submit" value="Submit" />
 			</form>
