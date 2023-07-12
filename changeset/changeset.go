@@ -2,7 +2,6 @@ package changeset
 
 import (
 	"net/url"
-	"reflect"
 
 	"golang.org/x/exp/slices"
 )
@@ -31,13 +30,12 @@ type Config struct {
 // validating the struct. It provides a way to check if a given struct is valid
 // and if not a way to access the errors for each field. A changeset is meant to
 // work with HTML form data in concert with the phx-change and phx-submit events.
-type Changeset struct {
+type Changeset[T any] struct {
 	Errors  map[string]error // map of field name to error message
 	Initial url.Values       // map of initial values
 	Changes url.Values       // map of field name that differs from the original value
 	Values  url.Values       // map of merged changes and original values
 
-	ptr     any             // pointer to struct type for changeset
 	action  string          // last update action; only run validations if action is not empty
 	touched map[string]bool // map of field names that were touched
 	config  *Config
@@ -49,7 +47,7 @@ type Changeset struct {
 // If the action is empty, Valid will always return true.
 // If the action is not empty, Valid will return true if there are no errors
 // or if there are errors but the field was not touched.
-func (c *Changeset) Valid() bool {
+func (c *Changeset[T]) Valid() bool {
 	// blank action or nil Errors means valid
 	if c.action == "" || c.Errors == nil {
 		return true
@@ -68,19 +66,17 @@ func (c *Changeset) Valid() bool {
 }
 
 // Struct returns the changeset Values decoded into a struct of T or an error if there was a problem decoding.
-func (c *Changeset) Struct() (any, error) {
-	t := reflect.New(reflect.TypeOf(c.ptr).Elem()).Interface()
+func (c *Changeset[T]) Struct() (*T, error) {
+	t := new(T)
 	err := c.config.Decoder.Decode(t, c.Values)
 	return t, err
 }
 
 // New returns a new Changeset of type T using the Config and initilizes the Changeset with the given initial values.
-func New[T any](cc *Config, initial url.Values) *Changeset {
-	s := reflect.New(reflect.TypeOf(new(T)).Elem()).Interface()
-	c := &Changeset{
+func New[T any](cc *Config, initial url.Values) *Changeset[T] {
+	c := &Changeset[T]{
 		Initial: initial,
 		Values:  initial,
-		ptr:     s,
 		config:  cc,
 	}
 	return c
@@ -90,7 +86,7 @@ func New[T any](cc *Config, initial url.Values) *Changeset {
 // will always return true for Valid(). Passing a non-empty action will cause the
 // changeset to run validations which may change the result of Valid() depending on
 // whether or not there are errors and whether or not the field was touched.
-func (c *Changeset) Update(newData url.Values, action string) error {
+func (c *Changeset[T]) Update(newData url.Values, action string) error {
 	c.action = action
 
 	// initialize Values if nil
@@ -121,7 +117,7 @@ func (c *Changeset) Update(newData url.Values, action string) error {
 
 	// validate if action is not empty
 	if action != "" {
-		t := reflect.New(reflect.TypeOf(c.ptr).Elem()).Interface()
+		t := new(T)
 		var err error
 		c.Errors, err = c.config.Validator.Validate(t, c.Values)
 		if err != nil {
@@ -149,7 +145,7 @@ func (c *Changeset) Update(newData url.Values, action string) error {
 }
 
 // Value returns the value for the given key.
-func (c *Changeset) Value(key string) string {
+func (c *Changeset[T]) Value(key string) string {
 	if c == nil || c.Values == nil {
 		return ""
 	}
@@ -157,7 +153,7 @@ func (c *Changeset) Value(key string) string {
 }
 
 // Error returns the error for the given key.
-func (c *Changeset) Error(key string) error {
+func (c *Changeset[T]) Error(key string) error {
 	if c == nil || c.Errors == nil || c.Errors[key] == nil || c.touched == nil || !c.touched[key] || c.Valid() {
 		return nil
 	}
@@ -165,12 +161,12 @@ func (c *Changeset) Error(key string) error {
 }
 
 // HasError returns true if Error(key) returns a non-nil error
-func (c *Changeset) HasError(key string) bool {
+func (c *Changeset[T]) HasError(key string) bool {
 	return c.Error(key) != nil
 }
 
 // AddError adds an error for the given key and marks the field as touched.
-func (c *Changeset) AddError(key string, err error) {
+func (c *Changeset[T]) AddError(key string, err error) {
 	if c.Errors == nil {
 		c.Errors = make(map[string]error)
 	}
