@@ -26,7 +26,8 @@ type Config struct {
 	Decoder
 }
 
-// Any represents the interface that all changeset structs must implement without the typing constraint.
+// Any represents any Changeset.
+// It is useful for working with arbitrary changesets outside of generics.
 type Any interface {
 	Value(string) string
 	Error(string) error
