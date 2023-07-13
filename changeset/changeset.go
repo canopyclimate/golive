@@ -26,18 +26,43 @@ type Config struct {
 	Decoder
 }
 
+// Valuer provides a way to get the value for a given key.
+type Valuer interface {
+	Value(string) string
+}
+
+// Errorer provides a way to get the error for a given key.
+type Errorer interface {
+	Error(string) error
+}
+
+// ErrorRemover provides a way to remove an error for a given key.
+type ErrorRemover interface {
+	RemoveError(string) error
+}
+
+// ErrorAdder provides a way to add an error for a given key.
+type ErrorAdder interface {
+	AddError(string, error)
+}
+
+// HasErrorer provides a way to check if there is an error for a given key.
+type HasErrorer interface {
+	HasError(string) bool
+}
+
 // Changeset provides a powerful API for decoding URL values into a struct and
 // validating the struct. It provides a way to check if a given struct is valid
 // and if not a way to access the errors for each field. A changeset is meant to
 // work with HTML form data in concert with the phx-change and phx-submit events.
 type Changeset[T any] struct {
-	Errors  map[string]error // map of field name to error message
-	Initial url.Values       // map of initial values
-	Changes url.Values       // map of field name that differs from the original value
-	Values  url.Values       // map of merged changes and original values
+	Initial url.Values // map of initial values
+	Changes url.Values // map of field name that differs from the original value
+	Values  url.Values // map of merged changes and original values
 
-	action  string          // last update action; only run validations if action is not empty
-	touched map[string]bool // map of field names that were touched
+	errors  map[string]error // map of field name to error message
+	action  string           // last update action; only run validations if action is not empty
+	touched map[string]bool  // map of field names that were touched
 	config  *Config
 }
 
@@ -49,7 +74,7 @@ type Changeset[T any] struct {
 // or if there are errors but the field was not touched.
 func (c *Changeset[T]) Valid() bool {
 	// blank action or nil Errors means valid
-	if c.action == "" || c.Errors == nil {
+	if c.action == "" || c.errors == nil {
 		return true
 	}
 
@@ -58,7 +83,7 @@ func (c *Changeset[T]) Valid() bool {
 	// otherwise, only check for errors on touched fields
 	// and return false if there are any errors
 	for k, touched := range c.touched {
-		if touched && c.Errors[k] != nil {
+		if touched && c.errors[k] != nil {
 			return false
 		}
 	}
@@ -119,7 +144,7 @@ func (c *Changeset[T]) Update(newData url.Values, action string) error {
 	if action != "" {
 		t := new(T)
 		var err error
-		c.Errors, err = c.config.Validator.Validate(t, c.Values)
+		c.errors, err = c.config.Validator.Validate(t, c.Values)
 		if err != nil {
 			return err
 		}
@@ -136,7 +161,7 @@ func (c *Changeset[T]) Update(newData url.Values, action string) error {
 			for d := range newData {
 				c.touched[d] = true
 			}
-			for k := range c.Errors {
+			for k := range c.errors {
 				c.touched[k] = true
 			}
 		}
@@ -154,10 +179,10 @@ func (c *Changeset[T]) Value(key string) string {
 
 // Error returns the error for the given key.
 func (c *Changeset[T]) Error(key string) error {
-	if c == nil || c.Errors == nil || c.Errors[key] == nil || c.touched == nil || !c.touched[key] || c.Valid() {
+	if c == nil || c.errors == nil || c.errors[key] == nil || c.touched == nil || !c.touched[key] || c.Valid() {
 		return nil
 	}
-	return c.Errors[key]
+	return c.errors[key]
 }
 
 // HasError returns true if Error(key) returns a non-nil error
@@ -167,12 +192,28 @@ func (c *Changeset[T]) HasError(key string) bool {
 
 // AddError adds an error for the given key and marks the field as touched.
 func (c *Changeset[T]) AddError(key string, err error) {
-	if c.Errors == nil {
-		c.Errors = make(map[string]error)
+	if c.errors == nil {
+		c.errors = make(map[string]error)
 	}
-	c.Errors[key] = err
+	c.errors[key] = err
 	if c.touched == nil {
 		c.touched = make(map[string]bool)
 	}
 	c.touched[key] = true
+}
+
+// RemoveError removes the error for the given key returning the error at the given key
+// or nil if there was no error.
+func (c *Changeset[T]) RemoveError(key string) error {
+	if c.errors == nil {
+		return nil
+	}
+	e := c.errors[key]
+	delete(c.errors, key)
+	return e
+}
+
+// Errors returns the raw map of errors.
+func (c *Changeset[T]) Errors() map[string]error {
+	return c.errors
 }

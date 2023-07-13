@@ -25,14 +25,6 @@ var (
 	))
 )
 
-type Valuer interface {
-	Value(string) string
-}
-
-type Errorer interface {
-	Error(string) error
-}
-
 // InputTag renders an input tag with the given key and value for the provided changeset.
 func InputTag(v Valuer, key string) htmltmpl.HTML {
 	val := v.Value(key)
