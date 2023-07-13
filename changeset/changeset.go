@@ -26,28 +26,12 @@ type Config struct {
 	Decoder
 }
 
-// Valuer provides a way to get the value for a given key.
-type Valuer interface {
+// Any represents the interface that all changeset structs must implement without the typing constraint.
+type Any interface {
 	Value(string) string
-}
-
-// Errorer provides a way to get the error for a given key.
-type Errorer interface {
 	Error(string) error
-}
-
-// ErrorRemover provides a way to remove an error for a given key.
-type ErrorRemover interface {
-	RemoveError(string) error
-}
-
-// ErrorAdder provides a way to add an error for a given key.
-type ErrorAdder interface {
 	AddError(string, error)
-}
-
-// HasErrorer provides a way to check if there is an error for a given key.
-type HasErrorer interface {
+	RemoveError(string) error
 	HasError(string) bool
 }
 

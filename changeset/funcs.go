@@ -26,8 +26,8 @@ var (
 )
 
 // InputTag renders an input tag with the given key and value for the provided changeset.
-func InputTag(v Valuer, key string) htmltmpl.HTML {
-	val := v.Value(key)
+func InputTag(cs Any, key string) htmltmpl.HTML {
+	val := cs.Value(key)
 	buf := new(strings.Builder)
 	dot := struct{ Key, Val string }{Key: key, Val: val}
 	err := inputTagTmpl.Execute(buf, dot)
@@ -38,8 +38,8 @@ func InputTag(v Valuer, key string) htmltmpl.HTML {
 }
 
 // ErrorTag renders an error tag if there is an error for the given key in the provided changeset.
-func ErrorTag(e Errorer, key string) htmltmpl.HTML {
-	val := e.Error(key)
+func ErrorTag(cs Any, key string) htmltmpl.HTML {
+	val := cs.Error(key)
 	buf := new(strings.Builder)
 	err := errorTagTmpl.Execute(buf, val)
 	if err != nil {
