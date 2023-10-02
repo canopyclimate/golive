@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"runtime/debug"
 )
 
 // joinHandler wraps an http.ResponseWriter and swallows all HTTP activity—
@@ -20,7 +21,7 @@ func (x *joinHandler) Header() http.Header {
 }
 
 func (x *joinHandler) Write(b []byte) (int, error) {
-	return 0, fmt.Errorf("joinHandler.Write does not accept writes")
+	return 0, fmt.Errorf("joinHandler.Write does not accept writes. Attempted to write %q from:\n%s", b, debug.Stack())
 }
 
 func (x *joinHandler) WriteHeader(statusCode int) {
