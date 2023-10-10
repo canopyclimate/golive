@@ -96,7 +96,7 @@ func LiveViewTag(ld *LayoutDot) (htmltmpl.HTML, error) {
 }
 
 // FileInputTag renders a file input tag for uploading files to a View.
-func FileInputTag(uc UploadConfig) (htmltmpl.HTML, error) {
+func FileInputTag(uc UploadConfig, cssClasses string) (htmltmpl.HTML, error) {
 	tmpl := htmltmpl.Must(htmltmpl.New("liveFileInput").Parse(`<input
       id="{{.Ref}}"
       type="file"
@@ -108,6 +108,7 @@ func FileInputTag(uc UploadConfig) (htmltmpl.HTML, error) {
       data-phx-update="ignore"
       data-phx-upload-ref="{{.Ref}}"
       phx-hook="Phoenix.LiveFileUpload"
+	  {{if .Classes}}class="{{.Classes}}"{{end}}
       {{if .Multiple}}multiple{{end}} />`,
 	))
 
@@ -131,6 +132,7 @@ func FileInputTag(uc UploadConfig) (htmltmpl.HTML, error) {
 		"ActiveRefs":      strings.Join(activeRefs, ","),
 		"DoneRefs":        strings.Join(doneRefs, ","),
 		"PreflightedRefs": strings.Join(preflightedRefs, ","),
+		"Classes":         cssClasses,
 	}
 	var buf strings.Builder
 	err := tmpl.Execute(&buf, dot)

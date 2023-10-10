@@ -6,16 +6,16 @@
   <div>
     <!-- file input / drag and drop -->
     <div phx-drop-target="{{.UploadPhotos.Ref}}" style="border: 2px dashed #ccc; padding: 10px; margin: 10px 0;">
-      {{liveFileInputTag .UploadPhotos}}
-      or drag and drop files here 
-    </div>        
+      {{liveFileInputTag .UploadPhotos  ""}}
+      or drag and drop files here
+    </div>
     <!-- help text -->
     <div style="font-size: 10px; padding-bottom: 3rem">
       Add up to {{ .UploadPhotos.MaxEntries }} photos
       (max {{ .UploadPhotos.MaxFileSize }} bytes each)
     </div>
   </div>
-  
+
   <!-- any errors from the upload -->
   {{ range $err := .UploadPhotos.Errors }}
     <p class="invalid-feedback">{{ $err }}</p>
@@ -46,7 +46,7 @@
 </form>
 
 <!-- render the photos -->
-<ul id="photos_list" phx-update="prepend">    
+<ul id="photos_list" phx-update="prepend">
   {{ range $photo := .Photos }}
     <li id="{{$photo.ID}}">
       <img src="{{ $photo.URL }}" style="width: 200px; height: 200px; object-fit: cover;"/>
