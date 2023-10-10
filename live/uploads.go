@@ -227,11 +227,11 @@ func CancelUpload(ctx context.Context, configName string, ref string) error {
 // Consume the uploaded files for a given UploadConfig (by name). This
 // should only be called after the form's "save" event has occurred which
 // guarantees all the files for the upload have been fully uploaded.
-func ConsumeUploadedEntries(
+func ConsumeUploadedEntries[T any](
 	ctx context.Context,
 	configName string,
-	fn func(meta ConsumeUploadedEntriesMeta, entry UploadEntry) any,
-) []any {
+	fn func(meta ConsumeUploadedEntriesMeta, entry UploadEntry) T,
+) []T {
 	s := socketValue(ctx)
 	if s == nil {
 		return nil
@@ -240,7 +240,7 @@ func ConsumeUploadedEntries(
 	if uc == nil {
 		return nil
 	}
-	var res []any
+	var res []T
 	tdir := filepath.Join(os.TempDir(), fmt.Sprintf("golive-%s", s.activeUploadRef))
 	for _, entry := range uc.Entries {
 		if !entry.Done {
