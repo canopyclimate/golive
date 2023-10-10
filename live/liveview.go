@@ -302,8 +302,10 @@ func (s *socket) serve(ctx context.Context) {
 				res = append(res, r)
 			}
 		case err := <-s.readerr:
-			// TODO: what?
-			fmt.Printf("websocket read failed: %v\n", err)
+			// String matching. Much sadness.
+			if !strings.Contains(err.Error(), "websocket: close") {
+				fmt.Printf("websocket read failed: %v\n", err)
+			}
 			return
 		}
 		if err != nil {
