@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -304,7 +305,7 @@ func (s *socket) serve(ctx context.Context) {
 		case err := <-s.readerr:
 			// String matching. Much sadness.
 			if !strings.Contains(err.Error(), "websocket: close") {
-				fmt.Printf("websocket read failed: %v\n", err)
+				log.Printf("websocket read failed: %v", err)
 			}
 			return
 		}
@@ -489,7 +490,7 @@ func (s *socket) dispatch(ctx context.Context, msg *phx.Msg) ([]byte, error) {
 				flashKey := vals.Get("key")
 				// TODO clear flash
 				// s.handler.ClearFlash(flashKey)
-				fmt.Printf("clear flash event: %s\n", flashKey)
+				log.Printf("clear flash event: %s", flashKey)
 			} else {
 				eh, ok := s.view.(EventHandler)
 				if !ok {
