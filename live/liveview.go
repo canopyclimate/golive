@@ -503,15 +503,8 @@ func (s *socket) dispatch(ctx context.Context, msg *phx.Msg) ([]byte, error) {
 			if err != nil {
 				return nil, err
 			}
-			eh, ok := s.view.(EventHandler)
-			if !ok {
-				return nil, fmt.Errorf("view %T does not implement EventHandler", s.view)
-			}
-			err = eh.HandleEvent(ctx, &Event{Type: ee, Data: vals})
-			if err != nil {
-				return nil, err
-			}
 
+			// handle uploads before calling HandleEvent
 			if uploads, ok := msg.Payload["uploads"].(map[string]any); ok && len(uploads) != 0 {
 				// get _target from form data
 				uc_target := vals.Get("_target")
@@ -521,6 +514,16 @@ func (s *socket) dispatch(ctx context.Context, msg *phx.Msg) ([]byte, error) {
 				if uc != nil && uc.Ref != "" && uploads[uc.Ref] != nil {
 					uc.AddEntries(uploads[uc.Ref].([]any))
 				}
+			}
+
+			// call the view's HandleEvent method if it implements EventHandler
+			eh, ok := s.view.(EventHandler)
+			if !ok {
+				return nil, fmt.Errorf("view %T does not implement EventHandler", s.view)
+			}
+			err = eh.HandleEvent(ctx, &Event{Type: ee, Data: vals})
+			if err != nil {
+				return nil, err
 			}
 
 		default:
@@ -619,6 +622,10 @@ func (s *socket) dispatch(ctx context.Context, msg *phx.Msg) ([]byte, error) {
 		for _, entry := range entries {
 			entriesMap[entry.(map[string]any)["ref"].(string)] = entry
 		}
+		entriesJson, err := json.Marshal(entriesMap)
+		if err != nil {
+			return nil, err
+		}
 
 		// build the diff component JSON
 		diffJson, err := lt.JSON()
@@ -626,10 +633,6 @@ func (s *socket) dispatch(ctx context.Context, msg *phx.Msg) ([]byte, error) {
 			return nil, err
 		}
 		configJson, err := json.Marshal(constraints)
-		if err != nil {
-			return nil, err
-		}
-		entriesJson, err := json.Marshal(entries)
 		if err != nil {
 			return nil, err
 		}
