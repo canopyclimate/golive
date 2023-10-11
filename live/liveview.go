@@ -231,7 +231,8 @@ func (x *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// TODO: route maps
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		panic("TODO: what? just disconnect?")
+		log.Printf("failed to upgrade websocket for %T: %v", w, err)
+		return
 	}
 	defer conn.Close() // TODO: is this right? probably...?
 	s := &socket{
