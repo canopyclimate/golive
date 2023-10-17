@@ -1,4 +1,4 @@
-Package fmtsort is Go 1.20.4's internal/fmtsort package.
+Package fmtsort is Go 1.21.3's internal/fmtsort package.
 
 Modifications:
 
