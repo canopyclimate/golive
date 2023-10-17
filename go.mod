@@ -1,6 +1,6 @@
 module github.com/canopyclimate/golive
 
-go 1.20
+go 1.21
 
 require (
 	github.com/dsnet/try v0.0.3
