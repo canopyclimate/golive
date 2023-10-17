@@ -1,4 +1,4 @@
-Package template is Go 1.20.4's text/template package, slightly modified.
+Package template is Go 1.21.3's text/template package, slightly modified.
 
 Modifications:
 
