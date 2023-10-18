@@ -170,6 +170,19 @@ func (t *Tree) WriteTo(w io.Writer) (written int64, err error) {
 		written += int64(n)
 		return err
 	}
+	writeDynamic := func(d any) error {
+		switch d := d.(type) {
+		case string:
+			return writeJSONString(d)
+		case *Tree:
+			// TODO - we want to include statics and diff them out elsewhere
+			n, err := d.WriteTo(w)
+			written += n
+			return err
+		default:
+			panic(fmt.Sprintf("unexpected type of Dynamic: %T, want string or *Tree, value is: %v", d, d))
+		}
+	}
 
 	// handle no dynamics case - basically collapse tree into a single string
 	if len(t.Dynamics) == 0 {
@@ -200,18 +213,8 @@ func (t *Tree) WriteTo(w io.Writer) (written int64, err error) {
 			if err := writeBytes(quoteColon); err != nil {
 				return written, err
 			}
-			switch d := d.(type) {
-			case string:
-				if err := writeJSONString(d); err != nil {
-					return written, err
-				}
-			case *Tree:
-				// TODO - we want to include statics and diff them out elsewhere
-				n, err := d.WriteTo(w)
-				written += n
-				if err != nil {
-					return written, err
-				}
+			if err := writeDynamic(d); err != nil {
+				return written, err
 			}
 		}
 	} else {
@@ -237,20 +240,8 @@ func (t *Tree) WriteTo(w io.Writer) (written int64, err error) {
 							return written, err
 						}
 					}
-					switch dd := dd.(type) {
-					case string:
-						if err := writeJSONString(dd); err != nil {
-							return written, err
-						}
-
-					case *Tree:
-						n, err := dd.WriteTo(w)
-						written += n
-						if err != nil {
-							return written, err
-						}
-					default:
-						panic(fmt.Sprintf("unexpected type of Dynamic inside []any: %T, want string or *Tree, value is: %v", dd, dd))
+					if err := writeDynamic(dd); err != nil {
+						return written, err
 					}
 				}
 			case *Tree:
