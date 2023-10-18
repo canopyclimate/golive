@@ -120,14 +120,6 @@ func Diff(a, b *Tree) {
 	panic("TODO")
 }
 
-var (
-	quoteColon   = []byte(`":`)
-	startStatics = []byte(`,"s":[`)
-	startTitle   = []byte(`,"t":`)
-	startEvents  = []byte(`,"e":[`)
-	startRange   = []byte(`"d":[`)
-)
-
 // JSON returns a JSON representation of the tree.
 func (t *Tree) JSON() ([]byte, error) {
 	b := new(bytes.Buffer)
@@ -138,50 +130,94 @@ func (t *Tree) JSON() ([]byte, error) {
 	return b.Bytes(), nil
 }
 
+type countWriter struct {
+	n   int64
+	w   io.Writer
+	buf []byte // re-usable buffer
+	err error
+}
+
+func (cw *countWriter) writeBytes(p []byte) {
+	if cw.err != nil {
+		return
+	}
+	n, err := cw.w.Write(p)
+	cw.n += int64(n)
+	cw.err = err
+}
+
+func (cw *countWriter) writeByte(b byte) {
+	if cw.err != nil {
+		return
+	}
+	cw.buf = cw.buf[:0]
+	cw.buf = append(cw.buf, b)
+	cw.writeBytes(cw.buf)
+}
+
+func (cw *countWriter) writeString(s string) {
+	if cw.err != nil {
+		return
+	}
+	if sw, ok := cw.w.(io.StringWriter); ok {
+		n, err := sw.WriteString(s)
+		cw.n += int64(n)
+		cw.err = err
+		return
+	}
+	cw.buf = cw.buf[:0]
+	cw.buf = append(cw.buf, s...)
+	cw.writeBytes(cw.buf)
+}
+
+func (cw *countWriter) writeInt(x int) {
+	if cw.err != nil {
+		return
+	}
+	cw.buf = cw.buf[:0]
+	cw.buf = strconv.AppendInt(cw.buf, int64(x), 10)
+	cw.writeBytes(cw.buf)
+}
+
+func (cw *countWriter) writeJSONString(s string) {
+	if cw.err != nil {
+		return
+	}
+	cw.buf = cw.buf[:0]
+	var err error
+	cw.buf, err = json.AppendString(cw.buf, s)
+	if err != nil {
+		cw.err = err
+		return
+	}
+	cw.writeBytes(cw.buf)
+}
+
+func (cw *countWriter) writeDynamic(d any) {
+	if cw.err != nil {
+		return
+	}
+	switch d := d.(type) {
+	case string:
+		cw.writeJSONString(d)
+	case *Tree:
+		// TODO - we want to include statics and diff them out elsewhere
+		d.writeTo(cw)
+	default:
+		panic(fmt.Sprintf("unexpected type of Dynamic: %T, want string or *Tree, value is: %v", d, d))
+	}
+}
+
 // WriteTo writes a JSON representation of the tree to w.
 func (t *Tree) WriteTo(w io.Writer) (written int64, err error) {
-	var buf []byte // re-usable buffer
-	writeByte := func(b byte) error {
-		buf = buf[:0]
-		buf = append(buf, b)
-		n, err := w.Write(buf)
-		written += int64(n)
-		return err
-	}
-	writeBytes := func(b []byte) error {
-		n, err := w.Write(b)
-		written += int64(n)
-		return err
-	}
-	writeInt := func(x int) error {
-		buf = buf[:0]
-		buf = strconv.AppendInt(buf, int64(x), 10)
-		n, err := w.Write(buf)
-		written += int64(n)
-		return err
-	}
-	writeJSONString := func(s string) error {
-		buf = buf[:0]
-		buf, err = json.AppendString(buf, s)
-		if err != nil {
-			return err
-		}
-		n, err := w.Write(buf)
-		written += int64(n)
-		return err
-	}
-	writeDynamic := func(d any) error {
-		switch d := d.(type) {
-		case string:
-			return writeJSONString(d)
-		case *Tree:
-			// TODO - we want to include statics and diff them out elsewhere
-			n, err := d.WriteTo(w)
-			written += n
-			return err
-		default:
-			panic(fmt.Sprintf("unexpected type of Dynamic: %T, want string or *Tree, value is: %v", d, d))
-		}
+	cw := &countWriter{w: w}
+	t.writeTo(cw)
+	return cw.n, cw.err
+}
+
+func (t *Tree) writeTo(cw *countWriter) (written int64, err error) {
+	if cw.err != nil {
+		return
 	}
 
 	// handle no dynamics case - basically collapse tree into a single string
@@ -189,133 +225,80 @@ func (t *Tree) WriteTo(w io.Writer) (written int64, err error) {
 		if len(t.Statics) != 1 {
 			return written, fmt.Errorf("internal error: malformed tree with 0 dynamics and %d statics", len(t.Statics))
 		}
-		err = writeJSONString(t.Statics[0])
-		return written, err
+		cw.writeJSONString(t.Statics[0])
+		return
 	}
 
-	if err := writeByte('{'); err != nil {
-		return written, err
-	}
+	cw.writeByte('{')
 
 	if !t.isRange {
 		for i, d := range t.Dynamics {
 			if i > 0 {
-				if err := writeByte(','); err != nil {
-					return written, err
-				}
+				cw.writeByte(',')
 			}
-			if err := writeByte('"'); err != nil {
-				return written, err
-			}
-			if err := writeInt(i); err != nil {
-				return written, err
-			}
-			if err := writeBytes(quoteColon); err != nil {
-				return written, err
-			}
-			if err := writeDynamic(d); err != nil {
-				return written, err
-			}
+			cw.writeByte('"')
+			cw.writeInt(i)
+			cw.writeString(`":`)
+			cw.writeDynamic(d)
 		}
 	} else {
 		// handle range case
-		if err := writeBytes(startRange); err != nil {
-			return written, err
-		}
+		cw.writeString(`"d":[`)
 		for i, d := range t.Dynamics {
 			if i > 0 {
-				if err := writeByte(','); err != nil {
-					return written, err
-				}
+				cw.writeByte(',')
 			}
-			if err := writeByte('['); err != nil {
-				return written, err
-			}
-
+			cw.writeByte('[')
 			switch d := d.(type) {
 			case []any:
 				for j, dd := range d {
 					if j > 0 {
-						if err := writeByte(','); err != nil {
-							return written, err
-						}
+						cw.writeByte(',')
 					}
-					if err := writeDynamic(dd); err != nil {
-						return written, err
-					}
+					cw.writeDynamic(dd)
 				}
 			case *Tree:
-				n, err := d.WriteTo(w)
-				written += n
-				if err != nil {
-					return written, err
-				}
+				d.writeTo(cw)
 			default:
 				panic(fmt.Sprintf("unexpected type of Dynamic: %T, want string or *Tree, value is: %v", d, d))
 			}
-			if err := writeByte(']'); err != nil {
-				return written, err
-			}
+			cw.writeByte(']')
 		}
 
-		if err := writeByte(']'); err != nil {
-			return written, err
-		}
+		cw.writeByte(']')
 	}
 
 	// if there are dynamics, we also should have statics
 	// but only write them if ExcludeStatics is false
 	if !t.ExcludeStatics {
-		if err := writeBytes(startStatics); err != nil {
-			return written, err
-		}
+		cw.writeString(`,"s":[`)
 		for i, s := range t.Statics {
 			if i > 0 {
-				if err := writeByte(','); err != nil {
-					return written, err
-				}
+				cw.writeByte(',')
 			}
 			// TODO: json encode s when we first receive it, instead of every time
-			if err := writeJSONString(s); err != nil {
-				return written, err
-			}
+			cw.writeJSONString(s)
 		}
-		if err := writeByte(']'); err != nil {
-			return written, err
-		}
+		cw.writeByte(']')
 	}
 	// write title tree part if not empty
 	if t.Title != "" {
-		if err := writeBytes(startTitle); err != nil {
-			return written, err
-		}
-		if err := writeJSONString(t.Title); err != nil {
-			return written, err
-		}
+		cw.writeString(`,"t":`)
+		cw.writeJSONString(t.Title)
 	}
 	// write events tree part if not empty
 	if len(t.Events) > 0 {
-		if err := writeBytes(startEvents); err != nil {
-			return written, err
-		}
+		cw.writeString(`,"e":[`)
 		for i, e := range t.Events {
 			if i > 0 {
-				if err := writeByte(','); err != nil {
-					return written, err
-				}
+				cw.writeByte(',')
 			}
-			if err := writeBytes(e); err != nil {
-				return written, err
-			}
+			cw.writeBytes(e)
 		}
-		if err := writeByte(']'); err != nil {
-			return written, err
-		}
+		cw.writeByte(']')
 	}
 
-	if err := writeByte('}'); err != nil {
-		return written, err
-	}
+	cw.writeByte('}')
 	return written, nil
 }
 
