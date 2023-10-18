@@ -29,6 +29,7 @@ func (t *Tree) AppendStatic(text string) {
 		return
 	}
 	// Prevent two consecutive statics by concatenation.
+	// TODO: this is potentially quadratic, consider storing statics as slices of strings instead
 	nDyn := t.nDyn()
 	if len(t.Statics) > nDyn {
 		t.Statics[len(t.Statics)-1] += text
@@ -136,7 +137,7 @@ func (t *Tree) JSON() ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-// Accept that Josh knew that it wasn't worth fighting with Go's MarshalText :P
+// WriteTo writes a JSON representation of the tree to w.
 func (t *Tree) WriteTo(w io.Writer) (written int64, err error) {
 	var buf []byte // re-usable buffer
 	writeByte := func(b byte) error {
