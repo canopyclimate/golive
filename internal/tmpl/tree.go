@@ -125,6 +125,7 @@ var (
 	startStatics = []byte(`,"s":[`)
 	startTitle   = []byte(`,"t":`)
 	startEvents  = []byte(`,"e":[`)
+	startRange   = []byte(`"d":[`)
 )
 
 // JSON returns a JSON representation of the tree.
@@ -215,19 +216,9 @@ func (t *Tree) WriteTo(w io.Writer) (written int64, err error) {
 		}
 	} else {
 		// handle range case
-		if err := writeByte('"'); err != nil {
+		if err := writeBytes(startRange); err != nil {
 			return written, err
 		}
-		if err := writeByte('d'); err != nil {
-			return written, err
-		}
-		if err := writeBytes(quoteColon); err != nil {
-			return written, err
-		}
-		if err := writeByte('['); err != nil {
-			return written, err
-		}
-
 		for i, d := range t.Dynamics {
 			if i > 0 {
 				if err := writeByte(','); err != nil {
