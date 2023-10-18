@@ -159,6 +159,10 @@ func (cw *countWriter) writeString(s string) {
 	if cw.err != nil {
 		return
 	}
+	if len(s) == 1 {
+		cw.writeByte(s[0])
+		return
+	}
 	if sw, ok := cw.w.(io.StringWriter); ok {
 		n, err := sw.WriteString(s)
 		cw.n += int64(n)
@@ -193,6 +197,13 @@ func (cw *countWriter) writeJSONString(s string) {
 	cw.writeBytes(cw.buf)
 }
 
+func (cw *countWriter) writeLeadingComma(i int) {
+	if i == 0 {
+		return
+	}
+	cw.writeByte(',')
+}
+
 func (cw *countWriter) writeDynamic(d any) {
 	if cw.err != nil {
 		return
@@ -215,91 +226,68 @@ func (t *Tree) WriteTo(w io.Writer) (written int64, err error) {
 	return cw.n, cw.err
 }
 
-func (t *Tree) writeTo(cw *countWriter) (written int64, err error) {
+func (t *Tree) writeTo(cw *countWriter) {
 	if cw.err != nil {
 		return
 	}
 
-	// handle no dynamics case - basically collapse tree into a single string
 	if len(t.Dynamics) == 0 {
 		if len(t.Statics) != 1 {
-			return written, fmt.Errorf("internal error: malformed tree with 0 dynamics and %d statics", len(t.Statics))
+			panic(fmt.Sprintf("internal error: malformed tree with 0 dynamics and %d statics", len(t.Statics)))
 		}
 		cw.writeJSONString(t.Statics[0])
 		return
 	}
 
-	cw.writeByte('{')
+	cw.writeString(`{`)
 
 	if !t.isRange {
 		for i, d := range t.Dynamics {
-			if i > 0 {
-				cw.writeByte(',')
-			}
-			cw.writeByte('"')
+			cw.writeLeadingComma(i)
+			cw.writeString(`"`)
 			cw.writeInt(i)
 			cw.writeString(`":`)
 			cw.writeDynamic(d)
 		}
 	} else {
-		// handle range case
 		cw.writeString(`"d":[`)
 		for i, d := range t.Dynamics {
-			if i > 0 {
-				cw.writeByte(',')
+			cw.writeLeadingComma(i)
+			cw.writeString(`[`)
+			for j, dd := range d.([]any) {
+				cw.writeLeadingComma(j)
+				cw.writeDynamic(dd)
 			}
-			cw.writeByte('[')
-			switch d := d.(type) {
-			case []any:
-				for j, dd := range d {
-					if j > 0 {
-						cw.writeByte(',')
-					}
-					cw.writeDynamic(dd)
-				}
-			case *Tree:
-				d.writeTo(cw)
-			default:
-				panic(fmt.Sprintf("unexpected type of Dynamic: %T, want string or *Tree, value is: %v", d, d))
-			}
-			cw.writeByte(']')
+			cw.writeString(`]`)
 		}
-
-		cw.writeByte(']')
+		cw.writeString(`]`)
 	}
 
-	// if there are dynamics, we also should have statics
-	// but only write them if ExcludeStatics is false
 	if !t.ExcludeStatics {
 		cw.writeString(`,"s":[`)
 		for i, s := range t.Statics {
-			if i > 0 {
-				cw.writeByte(',')
-			}
+			cw.writeLeadingComma(i)
 			// TODO: json encode s when we first receive it, instead of every time
 			cw.writeJSONString(s)
 		}
-		cw.writeByte(']')
+		cw.writeString(`]`)
 	}
-	// write title tree part if not empty
+
 	if t.Title != "" {
 		cw.writeString(`,"t":`)
 		cw.writeJSONString(t.Title)
 	}
-	// write events tree part if not empty
+
 	if len(t.Events) > 0 {
 		cw.writeString(`,"e":[`)
 		for i, e := range t.Events {
-			if i > 0 {
-				cw.writeByte(',')
-			}
+			cw.writeLeadingComma(i)
 			cw.writeBytes(e)
 		}
-		cw.writeByte(']')
+		cw.writeString(`]`)
 	}
 
-	cw.writeByte('}')
-	return written, nil
+	cw.writeString(`}`)
 }
 
 // RenderTo renders the content represented by t to w.
