@@ -5,6 +5,7 @@ import (
 	"io"
 	"math/rand"
 	"net/url"
+	"strings"
 	"testing"
 	"unicode/utf8"
 
@@ -36,55 +37,44 @@ func TestBasicSerialization(t *testing.T) {
 	}
 }
 
-func TestOneDynamicWithEmptyStaticResultsInString(t *testing.T) {
-	x, err := htmltmpl.New("x").Parse("{{ if .X }}{{.X}}{{ end }}")
-	if err != nil {
-		t.Fatal(err)
-	}
-	lt, err := x.ExecuteTree(map[string]any{"X": "foo"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	buf := new(bytes.Buffer)
-	n, err := lt.WriteTo(buf)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != int64(buf.Len()) {
-		t.Fatalf("wrote %d but tracked %d", buf.Len(), n)
-	}
-	const want = `{"0":{"0":"foo","s":["",""]},"s":["",""]}`
-	got := buf.String()
-	if want != got {
-		t.Fatalf("got %q want %q", got, want)
-	}
-}
+type dot = map[string]any
 
-func TestVariableDynamic(t *testing.T) {
-	x, err := htmltmpl.New("x").Parse(
-		`{{ $foo := "foo" }}
-	{{ $foo }}
-	`)
+func testExec(t *testing.T, funcs htmltmpl.FuncMap, tmpl, want string, dot dot) {
+	t.Helper()
+	x, err := htmltmpl.New("x").Funcs(funcs).Parse(tmpl)
 	if err != nil {
 		t.Fatal(err)
 	}
-	lt, err := x.ExecuteTree(map[string]any{})
+	lt, err := x.ExecuteTree(dot)
 	if err != nil {
 		t.Fatal(err)
 	}
-	buf := new(bytes.Buffer)
+	buf := new(strings.Builder)
 	n, err := lt.WriteTo(buf)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if n != int64(buf.Len()) {
-		t.Fatalf("wrote %d but tracked %d", buf.Len(), n)
+		t.Errorf("wrote %d but tracked %d", buf.Len(), n)
 	}
-	const want = `{"0":"foo","s":["\n\t","\n\t"]}`
 	got := buf.String()
 	if want != got {
 		t.Fatalf("got\n\t%s\nwant\n\t%s\n", got, want)
 	}
+}
+
+func TestOneDynamicWithEmptyStaticResultsInString(t *testing.T) {
+	const tmpl = "{{ if .X }}{{.X}}{{ end }}"
+	const want = `{"0":{"0":"foo","s":["",""]},"s":["",""]}`
+	testExec(t, nil, tmpl, want, dot{"X": "foo"})
+}
+
+func TestVariableDynamic(t *testing.T) {
+	const tmpl = `{{ $foo := "foo" }}
+	{{ $foo }}
+	`
+	const want = `{"0":"foo","s":["\n\t","\n\t"]}`
+	testExec(t, nil, tmpl, want, nil)
 }
 
 func TestTStructInTemplate(t *testing.T) {
@@ -96,32 +86,14 @@ func TestTStructInTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	x, err := htmltmpl.New("x").Funcs(funcs).Parse(`
+	const tmpl = `
 	{{ define "test_template" }}
 		Attr is: {{ .Attr }}
 	{{ end }}{{/*comment*/}}
 	{{ template "test_template" TestTStruct (Attr "foo") }}
-	`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	lt, err := x.ExecuteTree(map[string]any{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	buf := new(bytes.Buffer)
-	n, err := lt.WriteTo(buf)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != int64(buf.Len()) {
-		t.Fatalf("wrote %d but tracked %d", buf.Len(), n)
-	}
+	`
 	const want = `{"0":{"0":"foo","s":["\n\t\tAttr is: ","\n\t"]},"s":["\n\t\n\t","\n\t"]}`
-	got := buf.String()
-	if want != got {
-		t.Fatalf("got \n%q want \n%q", got, want)
-	}
+	testExec(t, funcs, tmpl, want, nil)
 }
 
 func TestEmptyRangeSerialization(t *testing.T) {
@@ -179,28 +151,9 @@ func TestNonEmptyRangeSerialization(t *testing.T) {
 }
 
 func TestRangeTemplateSerialization(t *testing.T) {
-	x, err := htmltmpl.New("x").Parse(
-		`{{ range $i, $v := .X }}{{ $i }}:{{ $v }}s{{/*comment*/}}t{{ end}}`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	lt, err := x.ExecuteTree(map[string][]string{"X": {"foo", "bar"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	buf := new(bytes.Buffer)
-	n, err := lt.WriteTo(buf)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != int64(buf.Len()) {
-		t.Fatalf("wrote %d but tracked %d", buf.Len(), n)
-	}
+	const tmpl = `{{ range $i, $v := .X }}{{ $i }}:{{ $v }}s{{/*comment*/}}t{{ end}}`
 	const want = `{"0":{"d":[["0","foo"],["1","bar"]],"s":["",":","st"]},"s":["",""]}`
-	got := buf.String()
-	if want != got {
-		t.Fatalf("got \n%q want \n%q", got, want)
-	}
+	testExec(t, nil, tmpl, want, dot{"X": []string{"foo", "bar"}})
 }
 
 func TestEvents(t *testing.T) {
@@ -228,6 +181,9 @@ func TestEvents(t *testing.T) {
 			"biz": []string{"buz"},
 		},
 	}).MarshalJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
 	root.Events = [][]byte{j, j2}
 	buf := new(bytes.Buffer)
 	n, err := root.WriteTo(buf)
