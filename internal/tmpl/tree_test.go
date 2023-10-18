@@ -39,7 +39,7 @@ func TestBasicSerialization(t *testing.T) {
 
 type dot = map[string]any
 
-func testExec(t *testing.T, funcs htmltmpl.FuncMap, tmpl, want string, dot dot) {
+func testExec(t *testing.T, funcs htmltmpl.FuncMap, tmpl, wantJSON, wantPlain string, dot dot) {
 	t.Helper()
 	x, err := htmltmpl.New("x").Funcs(funcs).Parse(tmpl)
 	if err != nil {
@@ -57,16 +57,37 @@ func testExec(t *testing.T, funcs htmltmpl.FuncMap, tmpl, want string, dot dot) 
 	if n != int64(buf.Len()) {
 		t.Errorf("wrote %d but tracked %d", buf.Len(), n)
 	}
-	got := buf.String()
-	if want != got {
-		t.Fatalf("got\n\t%s\nwant\n\t%s\n", got, want)
+	gotJSON := buf.String()
+	if wantJSON != gotJSON {
+		t.Errorf("json got\n\t%s\nwant\n\t%s\n", gotJSON, wantJSON)
+	}
+
+	buf.Reset()
+	err = x.Execute(buf, dot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotPlain := buf.String()
+	if wantPlain != gotPlain {
+		t.Errorf("exec got\n\t%s\nwant\n\t%s\n", gotPlain, wantPlain)
+	}
+
+	buf.Reset()
+	err = lt.RenderTo(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotRendered := buf.String()
+	if wantPlain != gotRendered {
+		t.Errorf("render got\n\t%s\nwant\n\t%s\n", wantPlain, gotRendered)
 	}
 }
 
 func TestOneDynamicWithEmptyStaticResultsInString(t *testing.T) {
 	const tmpl = "{{ if .X }}{{.X}}{{ end }}"
 	const want = `{"0":{"0":"foo","s":["",""]},"s":["",""]}`
-	testExec(t, nil, tmpl, want, dot{"X": "foo"})
+	const plain = `foo`
+	testExec(t, nil, tmpl, want, plain, dot{"X": "foo"})
 }
 
 func TestVariableDynamic(t *testing.T) {
@@ -74,7 +95,8 @@ func TestVariableDynamic(t *testing.T) {
 	{{ $foo }}
 	`
 	const want = `{"0":"foo","s":["\n\t","\n\t"]}`
-	testExec(t, nil, tmpl, want, nil)
+	const plain = "\n\tfoo\n\t"
+	testExec(t, nil, tmpl, want, plain, nil)
 }
 
 func TestTStructInTemplate(t *testing.T) {
@@ -93,7 +115,8 @@ func TestTStructInTemplate(t *testing.T) {
 	{{ template "test_template" TestTStruct (Attr "foo") }}
 	`
 	const want = `{"0":{"0":"foo","s":["\n\t\tAttr is: ","\n\t"]},"s":["\n\t\n\t","\n\t"]}`
-	testExec(t, funcs, tmpl, want, nil)
+	const plain = "\n\t\n\t\n\t\tAttr is: foo\n\t\n\t"
+	testExec(t, funcs, tmpl, want, plain, nil)
 }
 
 func TestEmptyRangeSerialization(t *testing.T) {
@@ -153,7 +176,8 @@ func TestNonEmptyRangeSerialization(t *testing.T) {
 func TestRangeTemplateSerialization(t *testing.T) {
 	const tmpl = `{{ range $i, $v := .X }}{{ $i }}:{{ $v }}s{{/*comment*/}}t{{ end}}`
 	const want = `{"0":{"d":[["0","foo"],["1","bar"]],"s":["",":","st"]},"s":["",""]}`
-	testExec(t, nil, tmpl, want, dot{"X": []string{"foo", "bar"}})
+	const plain = `0:foost1:barst`
+	testExec(t, nil, tmpl, want, plain, dot{"X": []string{"foo", "bar"}})
 }
 
 func TestEvents(t *testing.T) {

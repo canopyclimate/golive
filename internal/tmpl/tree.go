@@ -336,3 +336,38 @@ func (t *Tree) WriteTo(w io.Writer) (written int64, err error) {
 	}
 	return written, nil
 }
+
+// RenderTo renders the content represented by t to w.
+func (t *Tree) RenderTo(w io.Writer) error {
+	if t.Events != nil || t.Title != "" {
+		return fmt.Errorf("RenderTo does not support events or title")
+	}
+	dynamics := t.Dynamics
+	if !t.isRange {
+		dynamics = []any{t.Dynamics}
+	}
+	for _, dyns := range dynamics {
+		dyns := dyns.([]any)
+		for i := 0; i < len(t.Statics); i++ {
+			if _, err := io.WriteString(w, t.Statics[i]); err != nil {
+				return err
+			}
+			if i >= len(dyns) {
+				continue
+			}
+			switch dyn := dyns[i].(type) {
+			case string:
+				if _, err := io.WriteString(w, dyn); err != nil {
+					return err
+				}
+			case *Tree:
+				if err := dyn.RenderTo(w); err != nil {
+					return err
+				}
+			default:
+				panic(fmt.Sprintf("unexpected type of Dynamic: %T, want string or *Tree, value is: %v", dyn, dyn))
+			}
+		}
+	}
+	return nil
+}

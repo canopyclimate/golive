@@ -3,6 +3,7 @@ package tmpl
 import (
 	"bytes"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/canopyclimate/golive/htmltmpl"
@@ -48,6 +49,24 @@ func Fuzz(f *testing.F) {
 		}
 		if !bytes.Equal(out, out2) {
 			t.Errorf("non-idempotent JSON: %q != %q", out, out2)
+		}
+
+		// Confirm that a regular exec matches a rendered tree.
+		buf := new(strings.Builder)
+		err = x.Execute(buf, dot)
+		if err != nil {
+			// We successfully executed earlier, so this ought to as well.
+			t.Errorf("failed to exec: %v, template:\n%s\n", err, data)
+		}
+		exec := buf.String()
+		buf.Reset()
+		err = lt.RenderTo(buf)
+		if err != nil {
+			t.Errorf("failed to render: %v, template:\n%s\n", err, data)
+		}
+		render := buf.String()
+		if exec != render {
+			t.Errorf("exec != render: %q != %q", exec, render)
 		}
 	})
 }
