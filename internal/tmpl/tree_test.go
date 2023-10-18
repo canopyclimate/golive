@@ -80,10 +80,10 @@ func TestVariableDynamic(t *testing.T) {
 	if n != int64(buf.Len()) {
 		t.Fatalf("wrote %d but tracked %d", buf.Len(), n)
 	}
-	const want = `{"0":"","1":"foo","s":["","\n\t","\n\t"]}`
+	const want = `{"0":"foo","s":["\n\t","\n\t"]}`
 	got := buf.String()
 	if want != got {
-		t.Fatalf("got %q want %q", got, want)
+		t.Fatalf("got\n\t%s\nwant\n\t%s\n", got, want)
 	}
 }
 

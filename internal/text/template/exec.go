@@ -266,15 +266,15 @@ func (s *state) walk(dot reflect.Value, node parse.Node) {
 	s.at(node)
 	switch node := node.(type) {
 	case *parse.ActionNode:
-		if s.tree != nil {
-			buf := s.wr.(*bytes.Buffer)
-			buf.Reset()
-			defer func() { s.tree.AppendDynamic(buf.String()) }()
-		}
 		// Do not pop variables so they persist until next end.
 		// Also, if the action declares variables, don't print the result.
 		val := s.evalPipeline(dot, node.Pipe)
 		if len(node.Pipe.Decl) == 0 {
+			if s.tree != nil {
+				buf := s.wr.(*bytes.Buffer)
+				buf.Reset()
+				defer func() { s.tree.AppendDynamic(buf.String()) }()
+			}
 			s.printValue(node, val)
 		}
 	case *parse.BreakNode:
