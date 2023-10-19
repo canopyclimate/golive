@@ -8,6 +8,7 @@ package parse
 
 import (
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 )
@@ -382,6 +383,34 @@ func (i *IdentifierNode) tree() *Tree {
 
 func (i *IdentifierNode) Copy() Node {
 	return NewIdentifier(i.Ident).SetTree(i.tr).SetPos(i.Pos)
+}
+
+// ValueNode holds a value set through internal machinations.
+type ValueNode struct {
+	NodeType
+	Pos
+	tr    *Tree
+	Value reflect.Value
+}
+
+func (t *Tree) NewValue(value reflect.Value) *ValueNode {
+	return &ValueNode{tr: t, NodeType: NodeIdentifier, Value: value}
+}
+
+func (v *ValueNode) String() string {
+	return fmt.Sprintf("%v", v.Value)
+}
+
+func (v *ValueNode) writeTo(sb *strings.Builder) {
+	sb.WriteString(v.String())
+}
+
+func (v *ValueNode) tree() *Tree {
+	return v.tr
+}
+
+func (v *ValueNode) Copy() Node {
+	return v.tr.NewValue(v.Value)
 }
 
 // VariableNode holds a list of variable names, possibly with chained field

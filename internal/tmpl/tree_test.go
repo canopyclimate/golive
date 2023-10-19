@@ -119,6 +119,50 @@ func TestTStructInTemplate(t *testing.T) {
 	testExec(t, funcs, tmpl, want, plain, nil)
 }
 
+func TestBasicPostprocess(t *testing.T) {
+	funcs := htmltmpl.FuncMap{
+		"golive_postprocess_context_var": func() string { return "$ppctx" },
+		"golive_postprocess_start":       func() []string { return []string{"pp", "qq"} },
+		"golive_postprocess_end":         func() []string { return []string{"xpp"} },
+		"pp": func() string {
+			return "["
+		},
+		"qq": func() string {
+			return "("
+		},
+		"xpp": func(x ...any) string {
+			if len(x) == 0 {
+				return "]"
+			}
+			if x[0] != "!" {
+				t.Fatalf("$ppctx not set correctly, got %v (%T)", x[0], x[0])
+			}
+			return x[1].(string) + "]"
+		},
+	}
+
+	tests := []struct {
+		tmpl  string
+		want  string
+		plain string
+	}{
+		{
+			tmpl:  `{{$ppctx := "!"}}a{{ pp }}123{{ xpp }}b{{qq}}456{{ xpp }}c`,
+			want:  `{"0":"[123]","1":"(456]","s":["a","b","c"]}`,
+			plain: `a[123]b(456]c`,
+		},
+		{
+			tmpl:  `{{$ppctx := "!"}}a{{ .X }}b{{ pp }}123{{ xpp }}c`,
+			want:  `{"0":"X","1":"[123]","s":["a","b","c"]}`,
+			plain: `aXb[123]c`,
+		},
+	}
+
+	for _, test := range tests {
+		testExec(t, funcs, test.tmpl, test.want, test.plain, dot{"X": "X"})
+	}
+}
+
 func TestEmptyRangeSerialization(t *testing.T) {
 	root := tmpl.NewTree()
 	tree := root
