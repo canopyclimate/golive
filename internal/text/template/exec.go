@@ -41,6 +41,10 @@ type state struct {
 	vars  []variable // push-down stack of variable values.
 	depth int        // the height of the stack of executing templates.
 	tree  *tmpl.Tree // if non-nil, template output tree
+
+	ppStartFn string // if non-empty, name of the postprocess start function
+	ppEndFn   string // if non-empty, name of the postprocess end function
+	pp        bool   // if true, in a tree postprocess block
 }
 
 // variable holds the dynamic value of a variable such as $, $x etc.
@@ -226,6 +230,9 @@ func (t *Template) execute(wr io.Writer, data any) (err error) {
 		state.errorf("%q is an incomplete or empty template", t.Name())
 	}
 	state.walk(value, t.Root)
+	if state.pp {
+		state.errorf("missing %s call", state.ppEndFn)
+	}
 	return
 }
 
@@ -268,9 +275,9 @@ func (s *state) walk(dot reflect.Value, node parse.Node) {
 	case *parse.ActionNode:
 		// Do not pop variables so they persist until next end.
 		// Also, if the action declares variables, don't print the result.
-		val := s.evalPipeline(dot, node.Pipe)
+		val := s.evalPipeline(dot, s.pipeAfterPostprocess(node.Pipe))
 		if len(node.Pipe.Decl) == 0 {
-			if s.tree != nil {
+			if s.tree != nil && !s.pp {
 				buf := s.wr.(*bytes.Buffer)
 				buf.Reset()
 				defer func() { s.tree.AppendDynamic(buf.String()) }()
@@ -283,7 +290,7 @@ func (s *state) walk(dot reflect.Value, node parse.Node) {
 	case *parse.ContinueNode:
 		panic(walkContinue)
 	case *parse.IfNode:
-		if s.tree != nil {
+		if s.tree != nil && !s.pp {
 			cur := s.tree
 			s.tree = s.tree.AppendSub()
 			defer func() { s.tree = cur }()
@@ -294,7 +301,7 @@ func (s *state) walk(dot reflect.Value, node parse.Node) {
 			s.walk(dot, node)
 		}
 	case *parse.RangeNode:
-		if s.tree != nil {
+		if s.tree != nil && !s.pp {
 			cur := s.tree
 			// identify that this is a range node
 			s.tree = s.tree.AppendRangeSub()
@@ -302,14 +309,14 @@ func (s *state) walk(dot reflect.Value, node parse.Node) {
 		}
 		s.walkRange(dot, node)
 	case *parse.TemplateNode:
-		if s.tree != nil {
+		if s.tree != nil && !s.pp {
 			cur := s.tree
 			s.tree = s.tree.AppendSub()
 			defer func() { s.tree = cur }()
 		}
 		s.walkTemplate(dot, node)
 	case *parse.TextNode:
-		if s.tree != nil {
+		if s.tree != nil && !s.pp {
 			// TODO: vendor text/template/parse, too, so that
 			// we can store the original string in the node.
 			// This will be a meaningful performance win:
@@ -321,7 +328,7 @@ func (s *state) walk(dot reflect.Value, node parse.Node) {
 			}
 		}
 	case *parse.WithNode:
-		if s.tree != nil {
+		if s.tree != nil && !s.pp {
 			cur := s.tree
 			s.tree = s.tree.AppendSub()
 			defer func() { s.tree = cur }()
@@ -1103,4 +1110,67 @@ func printableValue(v reflect.Value) (any, bool) {
 		}
 	}
 	return v.Interface(), true
+}
+
+// pipeAfterPostprocess replaces pipe to account for postprocessing functions.
+// In normal execution, or when postprocessing isn't enabled, or when pipe
+// is not a call to a start/end postprocessing function, the input is returned unaltered.
+// pipeAfterPostprocess also updates s as appropriate to track postprocessing state.
+func (s *state) pipeAfterPostprocess(pipe *parse.PipeNode) *parse.PipeNode {
+	if s.tree == nil || s.ppStartFn == "" || s.ppEndFn == "" {
+		// no postprocessing possible, we can short-circuit
+		return pipe
+	}
+	// extract name of primary called function and its args
+	// if there isn't one, then we're not handling a postprocess function
+	if len(pipe.Decl) != 0 || len(pipe.Cmds) == 0 {
+		return pipe
+	}
+	rawArgs := pipe.Cmds[0].Args
+	if len(rawArgs) == 0 {
+		return pipe
+	}
+	fn, args := rawArgs[0], rawArgs[1:]
+	fnNode, ok := fn.(*parse.IdentifierNode)
+	if !ok {
+		return pipe
+	}
+
+	// handle postprocess functions, as appropriate
+	buf := s.wr.(*bytes.Buffer)
+	switch fnNode.Ident {
+	case s.ppStartFn:
+		if len(args) != 0 {
+			s.errorf("%s called with %d args, expected 0", s.ppStartFn, len(args))
+		}
+		if s.pp {
+			s.errorf("nested %s function call", s.ppStartFn)
+		}
+
+		s.pp = true
+
+		// start buffering output
+		buf.Reset()
+	case s.ppEndFn:
+		if len(args) != 1 {
+			s.errorf("%s called with %d args, expected 1", s.ppEndFn, len(args))
+		}
+		if !s.pp {
+			s.errorf("%s call without matching call to %s", s.ppEndFn, s.ppStartFn)
+		}
+
+		strNode, ok := args[0].(*parse.StringNode)
+		if !ok || strNode.Quoted != `""` {
+			s.errorf("%s called with non-empty-string arg %T", s.ppEndFn, args[0])
+		}
+
+		s.pp = false
+
+		// make a new pipe for the caller to execute (for postprocesing),
+		// substituting in the buffered output as the first arg
+		pipe = pipe.CopyPipe()
+		pipe.Cmds[0].Args[1].(*parse.StringNode).Text = buf.String()
+	}
+
+	return pipe
 }

@@ -119,6 +119,43 @@ func TestTStructInTemplate(t *testing.T) {
 	testExec(t, funcs, tmpl, want, plain, nil)
 }
 
+func TestBasicPostprocess(t *testing.T) {
+	funcs := htmltmpl.FuncMap{
+		"golive_postprocess_start": func() string { return "pp" },
+		"golive_postprocess_end":   func() string { return "xpp" },
+		"pp": func() string {
+			return "["
+		},
+		"xpp": func(s string) string {
+			if s == "" {
+				return "]"
+			}
+			return s + "]"
+		},
+	}
+
+	tests := []struct {
+		tmpl  string
+		want  string
+		plain string
+	}{
+		{
+			tmpl:  `a{{ pp }}123{{ xpp "" }}b`,
+			want:  `{"0":"[123]","s":["a","b"]}`,
+			plain: `a[123]b`,
+		},
+		{
+			tmpl:  `a{{ .X }}b{{ pp }}123{{ xpp "" }}c`,
+			want:  `{"0":"X","1":"[123]","s":["a","b","c"]}`,
+			plain: `aXb[123]c`,
+		},
+	}
+
+	for _, test := range tests {
+		testExec(t, funcs, test.tmpl, test.want, test.plain, dot{"X": "X"})
+	}
+}
+
 func TestEmptyRangeSerialization(t *testing.T) {
 	root := tmpl.NewTree()
 	tree := root
