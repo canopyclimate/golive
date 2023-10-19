@@ -9,8 +9,29 @@ import (
 	"github.com/canopyclimate/golive/internal/json"
 )
 
+var funcs = htmltmpl.FuncMap{
+	"golive_postprocess_context_var": func() string { return "$ppctx" },
+	"golive_postprocess_start":       func() []string { return []string{"pp", "qq"} },
+	"golive_postprocess_end":         func() []string { return []string{"xpp"} },
+	"pp": func() string {
+		return "["
+	},
+	"qq": func() string {
+		return "("
+	},
+	"xpp": func(x ...any) string {
+		if len(x) == 0 {
+			return "]"
+		}
+		if len(x) != 2 {
+			panic("expected 2 args")
+		}
+		return x[1].(string) + "]"
+	},
+}
+
 func fuzz(fatalf func(string, ...any), data string) int {
-	x, err := htmltmpl.New("x").Parse(data)
+	x, err := htmltmpl.New("x").Funcs(funcs).Parse(data)
 	if err != nil {
 		// Junk input.
 		return -1

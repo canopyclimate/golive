@@ -41,6 +41,12 @@ type state struct {
 	vars  []variable // push-down stack of variable values.
 	depth int        // the height of the stack of executing templates.
 	tree  *tmpl.Tree // if non-nil, template output tree
+
+	ppStartFns []string      // if non-empty, names of the postprocess start functions
+	ppEndFns   []string      // if non-empty, names of the postprocess end functions
+	ppCtxVar   string        // if non-empty, name of the variable that holds postprocess context
+	ppCtx      reflect.Value // if non-zero, value of the postprocess context variable
+	pp         bool          // if true, in a tree postprocess block
 }
 
 // variable holds the dynamic value of a variable such as $, $x etc.
@@ -51,6 +57,12 @@ type variable struct {
 
 // push pushes a new variable on the stack.
 func (s *state) push(name string, value reflect.Value) {
+	// Postprocess context variable is special.
+	// It is predeclared, and global.
+	if name == s.ppCtxVar {
+		s.ppCtx = value
+		return
+	}
 	s.vars = append(s.vars, variable{name, value})
 }
 
@@ -226,6 +238,9 @@ func (t *Template) execute(wr io.Writer, data any) (err error) {
 		state.errorf("%q is an incomplete or empty template", t.Name())
 	}
 	state.walk(value, t.Root)
+	if state.pp {
+		state.errorf("missing postprocess end call (one of %v)", state.ppEndFns)
+	}
 	return
 }
 
@@ -268,9 +283,9 @@ func (s *state) walk(dot reflect.Value, node parse.Node) {
 	case *parse.ActionNode:
 		// Do not pop variables so they persist until next end.
 		// Also, if the action declares variables, don't print the result.
-		val := s.evalPipeline(dot, node.Pipe)
+		val := s.evalPipeline(dot, s.pipeAfterPostprocess(node.Pipe))
 		if len(node.Pipe.Decl) == 0 {
-			if s.tree != nil {
+			if s.tree != nil && !s.pp {
 				buf := s.wr.(*bytes.Buffer)
 				buf.Reset()
 				defer func() { s.tree.AppendDynamic(buf.String()) }()
@@ -283,7 +298,7 @@ func (s *state) walk(dot reflect.Value, node parse.Node) {
 	case *parse.ContinueNode:
 		panic(walkContinue)
 	case *parse.IfNode:
-		if s.tree != nil {
+		if s.tree != nil && !s.pp {
 			cur := s.tree
 			s.tree = s.tree.AppendSub()
 			defer func() { s.tree = cur }()
@@ -294,7 +309,7 @@ func (s *state) walk(dot reflect.Value, node parse.Node) {
 			s.walk(dot, node)
 		}
 	case *parse.RangeNode:
-		if s.tree != nil {
+		if s.tree != nil && !s.pp {
 			cur := s.tree
 			// identify that this is a range node
 			s.tree = s.tree.AppendRangeSub()
@@ -302,14 +317,14 @@ func (s *state) walk(dot reflect.Value, node parse.Node) {
 		}
 		s.walkRange(dot, node)
 	case *parse.TemplateNode:
-		if s.tree != nil {
+		if s.tree != nil && !s.pp {
 			cur := s.tree
 			s.tree = s.tree.AppendSub()
 			defer func() { s.tree = cur }()
 		}
 		s.walkTemplate(dot, node)
 	case *parse.TextNode:
-		if s.tree != nil {
+		if s.tree != nil && !s.pp {
 			// TODO: vendor text/template/parse, too, so that
 			// we can store the original string in the node.
 			// This will be a meaningful performance win:
@@ -321,7 +336,7 @@ func (s *state) walk(dot reflect.Value, node parse.Node) {
 			}
 		}
 	case *parse.WithNode:
-		if s.tree != nil {
+		if s.tree != nil && !s.pp {
 			cur := s.tree
 			s.tree = s.tree.AppendSub()
 			defer func() { s.tree = cur }()
@@ -498,6 +513,8 @@ func (s *state) walkTemplate(dot reflect.Value, t *parse.TemplateNode) {
 	// No dynamic scoping: template invocations inherit no variables.
 	newState.vars = []variable{{"$", dot}}
 	newState.walk(dot, tmpl.Root)
+	// postprocessing contexts are globals!
+	s.ppCtx = newState.ppCtx
 }
 
 // Eval functions evaluate pipelines, commands, and their elements and extract
@@ -1037,6 +1054,8 @@ func (s *state) evalEmptyInterface(dot reflect.Value, n parse.Node) reflect.Valu
 		return s.evalVariableNode(dot, n, nil, missingVal)
 	case *parse.PipeNode:
 		return s.evalPipeline(dot, n)
+	case *parse.ValueNode:
+		return n.Value
 	}
 	s.errorf("can't handle assignment of %s to empty interface argument", n)
 	panic("not reached")
@@ -1103,4 +1122,80 @@ func printableValue(v reflect.Value) (any, bool) {
 		}
 	}
 	return v.Interface(), true
+}
+
+// pipeAfterPostprocess replaces pipe to account for postprocessing functions.
+// In normal execution, or when postprocessing isn't enabled, or when pipe
+// is not a call to a start/end postprocessing function, the input is returned unaltered.
+// pipeAfterPostprocess also updates s as appropriate to track postprocessing state.
+func (s *state) pipeAfterPostprocess(pipe *parse.PipeNode) *parse.PipeNode {
+	if s.tree == nil || len(s.ppStartFns) == 0 || len(s.ppEndFns) == 0 {
+		// no postprocessing possible, we can short-circuit
+		return pipe
+	}
+	// extract name of primary called function and its args
+	// if there isn't one, then we're not handling a postprocess function
+	if len(pipe.Decl) != 0 || len(pipe.Cmds) == 0 {
+		return pipe
+	}
+	rawArgs := pipe.Cmds[0].Args
+	if len(rawArgs) == 0 {
+		return pipe
+	}
+	fn, args := rawArgs[0], rawArgs[1:]
+	fnNode, ok := fn.(*parse.IdentifierNode)
+	if !ok {
+		return pipe
+	}
+
+	// handle postprocess functions, as appropriate
+	buf := s.wr.(*bytes.Buffer)
+	fnName := fnNode.Ident
+	switch {
+	case stringsContains(s.ppStartFns, fnName):
+		if len(args) != 0 {
+			s.errorf("%s called with %d args, expected 0", fnName, len(args))
+		}
+		if s.pp {
+			s.errorf("nested postprocess start function call (%s)", fnName)
+		}
+
+		// start buffering output
+		s.pp = true
+		buf.Reset()
+	case stringsContains(s.ppEndFns, fnName):
+		if len(args) != 0 {
+			s.errorf("%s called with %d args, expected 0", fnName, len(args))
+		}
+		if !s.pp {
+			s.errorf("%s call without matching call to one of %v", fnName, s.ppStartFns)
+		}
+
+		// stop buffering output
+		s.pp = false
+
+		// make a new pipe for the caller to execute (for postprocessing),
+		// substituting in the context var and the buffered output as the args
+		ctx := s.ppCtx
+		if !ctx.IsValid() {
+			ctx = reflect.ValueOf(new(any)).Elem() // untyped nil (go.dev/issue/51649)
+		}
+		pipe = pipe.CopyPipe()
+		pipe.Cmds[0].Args = append(
+			pipe.Cmds[0].Args,
+			s.tmpl.Tree.NewValue(ctx),
+			s.tmpl.Tree.NewValue(reflect.ValueOf(buf.String())),
+		)
+	}
+
+	return pipe
+}
+
+func stringsContains(list []string, s string) bool {
+	for _, item := range list {
+		if item == s {
+			return true
+		}
+	}
+	return false
 }
