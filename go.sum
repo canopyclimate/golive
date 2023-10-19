@@ -2,6 +2,8 @@ github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSs
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/dsnet/try v0.0.3 h1:ptR59SsrcFUYbT/FhAbKTV6iLkeD6O18qfIWRml2fqI=
 github.com/dsnet/try v0.0.3/go.mod h1:WBM8tRpUmnXXhY1U6/S8dt6UWdHTQ7y8A5YSkRCkq40=
+github.com/dvyukov/go-fuzz v0.0.0-20230614170735-95bc4d742dfa h1:YVzOTnOOshBWdYPmxbrIU/s0wVYp368Jx5s3NmKFy7k=
+github.com/dvyukov/go-fuzz v0.0.0-20230614170735-95bc4d742dfa/go.mod h1:11Gm+ccJnvAhCNLlf5+cS9KjtbaD5I5zaZpFMsTHWTw=
 github.com/evanw/esbuild v0.17.18 h1:Bgc11CEvauUX+UbBAwQ5JEzY8wzzAPxoLVwBaKvAAiU=
 github.com/evanw/esbuild v0.17.18/go.mod h1:iINY06rn799hi48UqEnaQvVfZWe6W9bET78LbvN8VWk=
 github.com/go-json-experiment/json v0.0.0-20221028162351-3fecd76f5acd h1:FOvRgTe8ivA4KurnEFbprmZPL8ofq8pX84Bsz6awTiU=

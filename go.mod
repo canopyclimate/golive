@@ -16,6 +16,7 @@ require (
 )
 
 require (
+	github.com/dvyukov/go-fuzz v0.0.0-20230614170735-95bc4d742dfa // indirect
 	github.com/evanw/esbuild v0.17.18 // indirect
 	github.com/josharian/tstruct v0.3.0 // indirect
 	github.com/leodido/go-urn v1.2.1 // indirect
