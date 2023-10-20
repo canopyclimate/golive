@@ -2,7 +2,6 @@ package htmltmpl
 
 import (
 	"encoding/json"
-	"fmt"
 	"testing"
 )
 
@@ -23,8 +22,8 @@ func TestExplore(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		fmt.Println(dot, ":")
-		fmt.Println(string(out))
-		fmt.Println("----")
+		t.Log(dot, ":")
+		t.Log(string(out))
+		t.Log("----")
 	}
 }
