@@ -7,10 +7,11 @@ package htmltmpl_test
 import (
 	"bytes"
 	"encoding/json"
-	. "html/template"
 	"strings"
 	"testing"
 	"text/template/parse"
+
+	. "github.com/canopyclimate/golive/htmltmpl"
 )
 
 func TestTemplateClone(t *testing.T) {

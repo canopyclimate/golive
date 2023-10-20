@@ -30,3 +30,12 @@ func (s *Setting) String() string {
 func (s *Setting) Value() string {
 	return ""
 }
+
+// IncNonDefault increments the non-default behavior counter
+// associated with the given setting.
+// This counter is exposed in the runtime/metrics value
+// /godebug/non-default-behavior/<name>:events.
+//
+// Note that Value must be called at least once before IncNonDefault.
+func (s *Setting) IncNonDefault() {
+}
