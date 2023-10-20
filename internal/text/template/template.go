@@ -7,7 +7,8 @@ package template
 import (
 	"reflect"
 	"sync"
-	"text/template/parse"
+
+	"github.com/canopyclimate/golive/internal/text/template/parse"
 )
 
 // common holds the information shared by related templates.

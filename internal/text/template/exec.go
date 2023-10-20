@@ -12,9 +12,9 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
-	"text/template/parse"
 
 	"github.com/canopyclimate/golive/internal/fmtsort"
+	"github.com/canopyclimate/golive/internal/text/template/parse"
 	"github.com/canopyclimate/golive/internal/tmpl"
 )
 

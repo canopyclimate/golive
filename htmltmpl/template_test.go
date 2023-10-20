@@ -9,9 +9,9 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
-	"text/template/parse"
 
 	. "github.com/canopyclimate/golive/htmltmpl"
+	"github.com/canopyclimate/golive/internal/text/template/parse"
 )
 
 func TestTemplateClone(t *testing.T) {

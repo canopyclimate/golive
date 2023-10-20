@@ -12,9 +12,9 @@ import (
 	"path"
 	"path/filepath"
 	"sync"
-	"text/template/parse"
 
 	"github.com/canopyclimate/golive/internal/text/template"
+	"github.com/canopyclimate/golive/internal/text/template/parse"
 )
 
 // Template is a specialized Template from "text/template" that produces a safe

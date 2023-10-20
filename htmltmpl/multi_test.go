@@ -11,7 +11,8 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"text/template/parse"
+
+	"github.com/canopyclimate/golive/internal/text/template/parse"
 )
 
 var multiExecTests = []execTest{

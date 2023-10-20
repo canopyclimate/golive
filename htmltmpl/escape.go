@@ -10,10 +10,10 @@ import (
 	"html"
 	"io"
 	"regexp"
-	"text/template/parse"
 
 	"github.com/canopyclimate/golive/internal/godebug"
 	"github.com/canopyclimate/golive/internal/text/template"
+	"github.com/canopyclimate/golive/internal/text/template/parse"
 )
 
 // escapeTemplate rewrites the named template, which must be
