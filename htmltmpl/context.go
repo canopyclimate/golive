@@ -6,7 +6,8 @@ package htmltmpl
 
 import (
 	"fmt"
-	"text/template/parse"
+
+	"github.com/canopyclimate/golive/internal/text/template/parse"
 )
 
 // context describes the state an HTML parser must be in when it reaches the

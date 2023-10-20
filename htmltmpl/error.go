@@ -6,7 +6,8 @@ package htmltmpl
 
 import (
 	"fmt"
-	"text/template/parse"
+
+	"github.com/canopyclimate/golive/internal/text/template/parse"
 )
 
 // Error describes a problem encountered during template Escaping.

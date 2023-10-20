@@ -11,9 +11,9 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"text/template/parse"
 
 	"github.com/canopyclimate/golive/internal/text/template"
+	"github.com/canopyclimate/golive/internal/text/template/parse"
 )
 
 type badMarshaler struct{}
