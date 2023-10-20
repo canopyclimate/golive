@@ -41,7 +41,7 @@ type dot = map[string]any
 
 func testExec(t *testing.T, funcs htmltmpl.FuncMap, tmpl, wantJSON, wantPlain string, dot dot) {
 	t.Helper()
-	x, err := htmltmpl.New("x").Funcs(funcs).Parse(tmpl)
+	x, err := htmltmpl.New("test_tmpl").Funcs(funcs).Parse(tmpl)
 	if err != nil {
 		t.Fatal(err)
 	}
