@@ -2,11 +2,9 @@ package fuzz
 
 import (
 	"bytes"
-	"errors"
 	"strings"
 
 	"github.com/canopyclimate/golive/htmltmpl"
-	"github.com/canopyclimate/golive/internal/json"
 )
 
 var funcs = htmltmpl.FuncMap{
@@ -57,15 +55,9 @@ func fuzz(fatalf func(string, ...any), data string) int {
 	}
 
 	// Confirm that we can marshal it.
-	out, err := lt.JSON()
-	if err != nil && !errors.Is(err, json.ErrInvalidUTF8) {
-		fatalf("failed to JSON: %v, template:\n%s\n", err, data)
-	}
+	out := lt.JSON()
 	// Confirm that a second marshalling generates the same output.
-	out2, err := lt.JSON()
-	if err != nil && !errors.Is(err, json.ErrInvalidUTF8) {
-		fatalf("failed to JSON second time: %v, template:\n%s\n", err, data)
-	}
+	out2 := lt.JSON()
 	if !bytes.Equal(out, out2) {
 		fatalf("non-idempotent JSON: %q != %q", out, out2)
 	}

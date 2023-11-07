@@ -358,6 +358,18 @@ type socket struct {
 	activeUploadRef   string
 	activeUploadTopic string
 	errTokenBucket    *rate.Limiter
+	oldTree           *tmpl.Tree
+}
+
+func (s *socket) treeDiff(newTree *tmpl.Tree) []byte {
+	oldTree := s.oldTree
+	s.oldTree = newTree
+	t := newTree
+	if oldTree != nil {
+		t = tmpl.Diff(oldTree, newTree)
+		fmt.Printf("old: %s\n\n\n new: %s\n\n\n diff: %s\n\n\n", oldTree.JSON(), newTree.JSON(), t.JSON())
+	}
+	return t.JSON()
 }
 
 func (s *socket) dispatch(ctx context.Context, msg *phx.Msg) ([]byte, error) {
@@ -445,11 +457,7 @@ func (s *socket) dispatch(ctx context.Context, msg *phx.Msg) ([]byte, error) {
 			if err != nil {
 				return nil, err
 			}
-			json, err := t.JSON()
-			if err != nil {
-				return nil, err
-			}
-			return phx.NewRendered(*msg, json).JSON()
+			return phx.NewRendered(*msg, s.treeDiff(t)).JSON()
 		case strings.HasPrefix(msg.Topic, "lvu:"):
 			// set active upload topic
 			s.activeUploadTopic = msg.Topic
@@ -543,14 +551,7 @@ func (s *socket) dispatch(ctx context.Context, msg *phx.Msg) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		// TODO diff the Tree / Context and send only the changes
-		// for now, we send it all back...
-		// Note, we return a "diff" instead of a "rendered" response
-		diff, err := t.JSON()
-		if err != nil {
-			return nil, err
-		}
-		return phx.NewReplyDiff(*msg, diff).JSON()
+		return phx.NewReplyDiff(*msg, s.treeDiff(t)).JSON()
 	case "live_patch":
 		r := s.req.Clone(s.req.Context()) // todo: background context?
 		v, code, _ := s.config.viewForRequest(nil, r, s.view)
@@ -574,14 +575,7 @@ func (s *socket) dispatch(ctx context.Context, msg *phx.Msg) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		// TODO diff the Tree / Context and send only the changes
-		// for now, we send it all back...
-		// Note, we return a "diff" instead of a "rendered" response
-		diff, err := lt.JSON()
-		if err != nil {
-			return nil, err
-		}
-		return phx.NewReplyDiff(*msg, diff).JSON()
+		return phx.NewReplyDiff(*msg, s.treeDiff(lt)).JSON()
 	case "phx_leave":
 		if s.view != nil {
 			// check if the view implements the Closer interface
@@ -632,10 +626,7 @@ func (s *socket) dispatch(ctx context.Context, msg *phx.Msg) ([]byte, error) {
 		}
 
 		// build the diff component JSON
-		diffJson, err := lt.JSON()
-		if err != nil {
-			return nil, err
-		}
+		diffJson := s.treeDiff(lt)
 		configJson, err := json.Marshal(constraints)
 		if err != nil {
 			return nil, err
@@ -673,14 +664,7 @@ func (s *socket) dispatch(ctx context.Context, msg *phx.Msg) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		// TODO diff the Tree / Context and send only the changes
-		// for now, we send it all back...
-		// Note, we return a "diff" instead of a "rendered" response
-		diff, err := lt.JSON()
-		if err != nil {
-			return nil, err
-		}
-		return phx.NewReplyDiff(*msg, diff).JSON()
+		return phx.NewReplyDiff(*msg, s.treeDiff(lt)).JSON()
 	}
 	return nil, fmt.Errorf("unknown event: %s", event)
 }
@@ -700,10 +684,7 @@ func (s *socket) handleInfo(ctx context.Context, info *Info) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("rendering error: %v", err)
 	}
-	diff, err := t.JSON()
-	if err != nil {
-		return nil, err
-	}
+	diff := t.JSON()
 	return phx.NewDiff(nil, s.id, diff).JSON()
 }
 

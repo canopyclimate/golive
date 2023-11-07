@@ -109,7 +109,7 @@ func TestUploadReplyDiff(t *testing.T) {
 		},
 	}
 
-	diffJson := try.E1(tr.JSON())
+	diffJson := tr.JSON()
 
 	configJson := try.E1(json.Marshal(c))
 	entriesJson := try.E1(json.Marshal(entries))

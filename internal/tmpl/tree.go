@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"reflect"
 	"strconv"
 
 	"github.com/canopyclimate/golive/internal/json"
@@ -116,18 +117,54 @@ func (t *Tree) Valid() error {
 	return nil
 }
 
-func Diff(a, b *Tree) {
-	panic("TODO")
+// not
+
+// Diff returns a new tree that represents the difference between the old and new trees.
+// return value may alias some parts of the input trees
+func Diff(old, new *Tree) *Tree {
+	diffTree := NewTree()
+	diffTree.ExcludeStatics = true
+	diffTree.isRange = new.isRange
+	if len(old.Dynamics) != len(new.Dynamics) {
+		diffTree.Dynamics = new.Dynamics
+		return diffTree
+	}
+	for i, d := range new.Dynamics {
+		switch d := d.(type) {
+		case nil:
+			panic(fmt.Sprintf("cannot use diffTree in diff comparison old: %q, new: %q", old.JSON(), new.JSON()))
+		case string:
+			if old.Dynamics[i] == new.Dynamics[i] {
+				diffTree.Dynamics = append(diffTree.Dynamics, nil)
+				continue
+			}
+			diffTree.Dynamics = append(diffTree.Dynamics, d)
+		case *Tree:
+			subTree := Diff(old.Dynamics[i].(*Tree), new.Dynamics[i].(*Tree))
+			fmt.Println("subTree: ", old.Dynamics[i].(*Tree), new.Dynamics[i].(*Tree), subTree)
+			var toAdd any // nil by default so if we don't find anything in subtree we still add nil marker
+			for _, sd := range subTree.Dynamics {
+				// if we find a non-nil element we want to add the subTree
+				if sd != nil {
+					toAdd = subTree
+					break
+				}
+			}
+			diffTree.Dynamics = append(diffTree.Dynamics, toAdd)
+		}
+	}
+	// TODO: handle statics?
+	return diffTree
 }
 
 // JSON returns a JSON representation of the tree.
-func (t *Tree) JSON() ([]byte, error) {
+func (t *Tree) JSON() []byte {
 	b := new(bytes.Buffer)
 	_, err := t.WriteTo(b)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
-	return b.Bytes(), nil
+	return b.Bytes()
 }
 
 type countWriter struct {
@@ -242,12 +279,21 @@ func (t *Tree) writeTo(cw *countWriter) {
 	cw.writeString(`{`)
 
 	if !t.isRange {
+		hasPrevious := false
 		for i, d := range t.Dynamics {
-			cw.writeLeadingComma(i)
+			switch d.(type) {
+			case nil:
+				fmt.Println("d: ", reflect.TypeOf(d))
+				continue // skip nil dynamics
+			}
+			if hasPrevious {
+				cw.writeString(`,`)
+			}
 			cw.writeString(`"`)
 			cw.writeInt(i)
 			cw.writeString(`":`)
 			cw.writeDynamic(d)
+			hasPrevious = true
 		}
 	} else {
 		cw.writeString(`"d":[`)
