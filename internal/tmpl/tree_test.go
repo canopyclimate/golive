@@ -2,6 +2,7 @@ package tmpl_test
 
 import (
 	"bytes"
+	js "encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -98,6 +99,43 @@ func TestEmptyDynamic(t *testing.T) {
 	testExec(t, nil, tmpl, want, plain, dot{"X": ""})
 }
 
+func mapEqFunc(a, b any) bool {
+	// if types differ, they are not equal
+	if a == nil || b == nil {
+		return false
+	}
+	switch a.(type) {
+	case string:
+		return a.(string) == b.(string)
+	case map[string]any:
+		for k, v := range a.(map[string]any) {
+			switch v.(type) {
+			case string:
+				if v.(string) != b.(map[string]any)[k].(string) {
+					return false
+				}
+			default:
+				return false
+			}
+		}
+	case []any:
+		for i, v := range a.([]any) {
+			switch v.(type) {
+			case string:
+				if v.(string) != b.([]any)[i].(string) {
+					return false
+				}
+			case map[string]any:
+				return mapEqFunc(v, b.([]any)[i])
+			}
+		}
+
+	default:
+		return false
+	}
+	return true
+}
+
 func TestBasicDiff(t *testing.T) {
 	t.Run("change_one_deep", func(t *testing.T) {
 		const tm = "{{ if .X }}{{.X}}{{ end }}"
@@ -115,12 +153,31 @@ func TestBasicDiff(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		diff := tmpl.Diff(oldTree, newTree)
-		want := `{"0":{"0":"B"}}`
-		dj := diff.JSON()
-		if want != string(dj) {
+		// diff := tmpl.Diff(oldTree, newTree)
+		oldMap := oldTree.Map()
+		newMap := newTree.Map()
+		diff := tmpl.DiffMap(oldMap, newMap)
+		wantMap := map[string]any{
+			"0": map[string]any{
+				"0": "B",
+			},
+		}
+		want, err := js.Marshal(wantMap)
+		if err != nil {
+			panic(err)
+		}
+		dj, err := js.Marshal(diff)
+		if err != nil {
+			panic(err)
+		}
+		if string(want) != string(dj) {
 			t.Fatalf("got %q want %q", dj, want)
 		}
+		// want := `{"0":{"0":"B"}}`
+		// dj := diff.JSON()
+		// if want != string(dj) {
+		// 	t.Fatalf("got %q want %q", dj, want)
+		// }
 	})
 
 	t.Run("change_two_deep", func(t *testing.T) {
@@ -138,11 +195,10 @@ func TestBasicDiff(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		diff := tmpl.Diff(oldTree, newTree)
+		diff := tmpl.DiffJSON(oldTree, newTree)
 		want := `{"1":{"0":"C"}}`
-		dj := diff.JSON()
-		if want != string(dj) {
-			t.Fatalf("got %q want %q", dj, want)
+		if want != string(diff) {
+			t.Fatalf("got %q want %q", diff, want)
 		}
 	})
 
@@ -163,11 +219,71 @@ func TestBasicDiff(t *testing.T) {
 		}
 		fmt.Printf("oldTree: %s\n", oldTree.JSON())
 		fmt.Printf("newTree: %s\n", newTree.JSON())
-		diff := tmpl.Diff(oldTree, newTree)
-		// want := `{"0":""}`
-		want := `{"0":{"0":""}}`
-		dj := diff.JSON()
-		if want != string(dj) {
+
+		oldMap := oldTree.Map()
+		newMap := newTree.Map()
+		diff := tmpl.DiffMap(oldMap, newMap)
+		wantMap := map[string]any{
+			"0": "",
+		}
+		want, err := js.Marshal(wantMap)
+		if err != nil {
+			panic(err)
+		}
+		dj, err := js.Marshal(diff)
+		if err != nil {
+			panic(err)
+		}
+		if string(want) != string(dj) {
+			t.Fatalf("got %q want %q", dj, want)
+		}
+
+		// diff := tmpl.Diff(oldTree, newTree)
+		// want := `{"0":{"0":""}}`
+		// dj := diff.JSON()
+		// if want != string(dj) {
+		// 	t.Fatalf("got %q want %q", dj, want)
+		// }
+	})
+
+	t.Run("range change", func(t *testing.T) {
+		const tm = "{{range .R}}{{.}}{{end}}"
+		x, err := htmltmpl.New("test_tmpl").Parse(tm)
+		if err != nil {
+			t.Fatal(err)
+		}
+		oldTree, err := x.ExecuteTree(map[string]any{"R": []string{"A", "B"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		newTree, err := x.ExecuteTree(map[string]any{"R": []string{"A", "B", "C"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		fmt.Printf("oldTree: %s\n", oldTree.JSON())
+		fmt.Printf("newTree: %s\n", newTree.JSON())
+		oldMap := oldTree.Map()
+		newMap := newTree.Map()
+		diff := tmpl.DiffMap(oldMap, newMap)
+		wantMap := map[string]any{
+			"0": map[string]any{
+				"d": []any{
+					[]any{"A"},
+					[]any{"B"},
+					[]any{"C"},
+				},
+			},
+		}
+		want, err := js.Marshal(wantMap)
+		if err != nil {
+			panic(err)
+		}
+		dj, err := js.Marshal(diff)
+		if err != nil {
+			panic(err)
+		}
+		if string(want) != string(dj) {
 			t.Fatalf("got %q want %q", dj, want)
 		}
 	})

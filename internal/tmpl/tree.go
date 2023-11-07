@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"strconv"
 
+	js "encoding/json"
+
 	"github.com/canopyclimate/golive/internal/json"
 )
 
@@ -117,90 +119,224 @@ func (t *Tree) Valid() error {
 	return nil
 }
 
-// not
+// DiffMap returns a new map that represents the difference between the old and new maps.
+func DiffMap(old, new map[string]any) map[string]any {
+	diff := make(map[string]any)
+	for k, nv := range new {
+		ov := old[k]
+		// new key
+		if ov == nil {
+			diff[k] = nv
+			continue
+		}
+		// skip title and event keys
+		if k == "t" || k == "e" {
+			continue
+		}
+		// statics key
+		if k == "s" {
+			oldStatics := ov.([]any)
+			newStatics := nv.([]any)
+			// check length
+			if len(oldStatics) != len(newStatics) {
+				diff[k] = newStatics
+			} else {
+				// diff statics
+				for i, sd := range newStatics {
+					if sd != oldStatics[i] {
+						diff[k] = newStatics
+						break
+					}
+				}
+			}
+		}
+		// range key
+		if k == "d" {
+			oldDynamics := ov.([]any)
+			newDynamics := nv.([]any)
+			// check length
+			if len(oldDynamics) != len(newDynamics) {
+				diff[k] = newDynamics
+				break
+			}
+			// diff dynamics
+			for i, nsd := range newDynamics {
+				osd := oldDynamics[i]
+				// should be an array of maps
+				for j, nsdd := range nsd.([]any) {
+					osdd := osd.([]any)[j]
+					switch nsdd.(type) {
+					case map[string]any:
+						md := DiffMap(osdd.(map[string]any), nsdd.(map[string]any))
+						if len(md) > 0 {
+							diff[k] = newDynamics
+							break
+						}
+					case string:
+						if nsdd != osdd {
+							diff[k] = newDynamics
+							break
+						}
+					}
+				}
+			}
+		}
+		// numeric key
+		// if different types at key take new
+		if reflect.TypeOf(ov) != reflect.TypeOf(nv) {
+			diff[k] = nv
+			break
+		}
+		// compare same types
+		switch nv.(type) {
+		case map[string]any:
+			md := DiffMap(ov.(map[string]any), nv.(map[string]any))
+			if len(md) > 0 {
+				diff[k] = md
+			}
+		case string:
+			if nv != ov {
+				diff[k] = nv
+			}
+		}
+	}
+	return diff
+}
 
 // Diff returns a new tree that represents the difference between the old and new trees.
 // return value may alias some parts of the input trees
-func Diff(old, new *Tree) *Tree {
-	fmt.Printf("DIFF old: %s new: %s\n", old.JSON(), new.JSON())
-	diffTree := NewTree()
-	diffTree.ExcludeStatics = true
-	diffTree.isRange = new.isRange
-	// if len(old.Dynamics) != len(new.Dynamics) {
-	// 	fmt.Printf("len(old.Dynamics) != len(new.Dynamics): %d != %d\n", len(old.Dynamics), len(new.Dynamics))
-	// 	// diffTree.Dynamics = new.Dynamics
-	// 	diffTree.Dynamics = make([]any, len(old.Dynamics))
-	// 	// for i := range diffTree.Dynamics {
-	// 	// 	diffTree.Dynamics[i] = NewTree()
-	// 	// }
-	// 	fmt.Printf("new.Dynamics: %v\n", diffTree.Dynamics)
-	// 	// {}
-	// 	// {nil}
-	// 	fmt.Printf("early return: %s\n", diffTree.JSON())
-	// 	return diffTree
-	// }
-	for i := 0; i < max(len(old.Dynamics), len(new.Dynamics)); i++ {
-		// Grab old and new dynamics, if available.
-		var od, nd any
-		if i < len(old.Dynamics) {
-			od = old.Dynamics[i]
-		}
-		if i < len(new.Dynamics) {
-			nd = new.Dynamics[i]
-		}
-
-		// Have more new dynamics than old dynamics. Add them.
-		if i >= len(old.Dynamics) {
-			diffTree.Dynamics = append(diffTree.Dynamics, nd)
-			continue
-		}
-
-		// Have more old dynamics than new dynamics.
-		// Add appropriately typed zero value.
-		if i >= len(new.Dynamics) {
-			switch od.(type) {
-			case string:
-				diffTree.Dynamics = append(diffTree.Dynamics, "")
-			case *Tree:
-				diffTree.Dynamics = append(diffTree.Dynamics, NewTree())
-			default:
-				panic(fmt.Sprintf("unexpected type of Dynamic: %T, want string or *Tree, value is: %v", od, od))
-			}
-			continue
-		}
-
-		// Have both old and new dynamics.
-		if reflect.TypeOf(od) != reflect.TypeOf(nd) {
-			panic(fmt.Sprintf("type mismatch: %T != %T", od, nd))
-		}
-
-		switch nd := nd.(type) {
-		case string:
-			if od == nd {
-				diffTree.Dynamics = append(diffTree.Dynamics, nil) // sentinal "unchanged" value
-				continue
-			}
-			diffTree.Dynamics = append(diffTree.Dynamics, nd)
-		case *Tree:
-			subTree := Diff(od.(*Tree), nd)
-			fmt.Printf("subTree: %s -> %s: %s\n", od.(*Tree).JSON(), nd.JSON(), subTree.JSON())
-			var toAdd any // nil (=sentinel "unchanged") by default
-			for _, sd := range subTree.Dynamics {
-				// if we find a changed (=not nil) element we want to add the whole diffed subTree
-				if sd != nil {
-					toAdd = subTree
-					break
-				}
-			}
-			diffTree.Dynamics = append(diffTree.Dynamics, toAdd)
-			fmt.Printf("NEW diffTree: %s\n", diffTree.JSON())
-		default:
-			panic(fmt.Sprintf("unexpected type of Dynamic: %T, want string or *Tree, value is: %v", nd, nd))
-		}
+func DiffJSON(old, new *Tree) []byte {
+	// use map to diff
+	oldMap := old.Map()
+	newMap := new.Map()
+	diffMap := DiffMap(oldMap, newMap)
+	diffJSON, err := js.Marshal(diffMap)
+	if err != nil {
+		panic(err)
 	}
-	fmt.Printf("DONE DIFFING: %s\n", diffTree.JSON())
-	// TODO: handle statics?
-	return diffTree
+	return diffJSON
+
+	// fmt.Printf("DIFF old: %s new: %s\n", old.JSON(), new.JSON())
+	// diffTree := NewTree()
+	// // if len(old.Dynamics) != len(new.Dynamics) {
+	// // 	fmt.Printf("len(old.Dynamics) != len(new.Dynamics): %d != %d\n", len(old.Dynamics), len(new.Dynamics))
+	// // 	// diffTree.Dynamics = new.Dynamics
+	// // 	diffTree.Dynamics = make([]any, len(old.Dynamics))
+	// // 	// for i := range diffTree.Dynamics {
+	// // 	// 	diffTree.Dynamics[i] = NewTree()
+	// // 	// }
+	// // 	fmt.Printf("new.Dynamics: %v\n", diffTree.Dynamics)
+	// // 	// {}
+	// // 	// {nil}
+	// // 	fmt.Printf("early return: %s\n", diffTree.JSON())
+	// // 	return diffTree
+	// // }
+	// for i := 0; i < max(len(old.Dynamics), len(new.Dynamics)); i++ {
+	// 	// Grab old and new dynamics, if available.
+	// 	var od, nd any
+	// 	if i < len(old.Dynamics) {
+	// 		od = old.Dynamics[i]
+	// 	}
+	// 	if i < len(new.Dynamics) {
+	// 		nd = new.Dynamics[i]
+	// 	}
+
+	// 	// Have more new dynamics than old dynamics. Add them.
+	// 	if i >= len(old.Dynamics) {
+	// 		diffTree.Dynamics = append(diffTree.Dynamics, nd)
+	// 		continue
+	// 	}
+
+	// 	// Have more old dynamics than new dynamics.
+	// 	// Add appropriately typed zero value.
+	// 	if i >= len(new.Dynamics) {
+	// 		switch od.(type) {
+	// 		case string:
+	// 			diffTree.Dynamics = append(diffTree.Dynamics, "")
+	// 		case *Tree:
+	// 			diffTree.Dynamics = append(diffTree.Dynamics, NewTree())
+	// 		case []any:
+	// 			panic("TODO: handle []any")
+	// 			//diffTree.Dynamics = append(diffTree.Dynamics, []any(nil))
+	// 		default:
+	// 			panic(fmt.Sprintf("1unexpected type of Dynamic: %T, want string or *Tree, value is: %v", od, od))
+	// 		}
+	// 		continue
+	// 	}
+
+	// 	// Have both old and new dynamics.
+	// 	if reflect.TypeOf(od) != reflect.TypeOf(nd) {
+	// 		panic(fmt.Sprintf("type mismatch: %T != %T", od, nd))
+	// 	}
+
+	// 	switch nd := nd.(type) {
+	// 	case string:
+	// 		if od == nd {
+	// 			diffTree.Dynamics = append(diffTree.Dynamics, nil) // sentinal "unchanged" value
+	// 			continue
+	// 		}
+	// 		diffTree.Dynamics = append(diffTree.Dynamics, nd)
+	// 	case *Tree:
+	// 		subTree := Diff(od.(*Tree), nd)
+	// 		fmt.Printf("subTree: %s -> %s: %s\n", od.(*Tree).JSON(), nd.JSON(), subTree.JSON())
+	// 		var toAdd any // nil (=sentinel "unchanged") by default
+	// 		for _, sd := range subTree.Dynamics {
+	// 			// if we find a changed (=not nil) element we want to add the whole diffed subTree
+	// 			if sd != nil {
+	// 				toAdd = subTree
+	// 				break
+	// 			}
+	// 		}
+	// 		diffTree.Dynamics = append(diffTree.Dynamics, toAdd)
+	// 		fmt.Printf("NEW diffTree: %s\n", diffTree.JSON())
+	// 	case []any:
+
+	// 		if len(od.([]any)) != len(nd) {
+	// 			// add the whole new slice
+	// 			diffTree.isRange = true
+	// 			diffTree.Dynamics = append(diffTree.Dynamics, nd)
+	// 			continue
+	// 		}
+	// 		// otherwise compare each element and if any are different add the whole new slice
+	// 		var toAdd any // nil (=sentinel "unchanged") by default
+	// 		for i, sd := range nd {
+	// 			if sd != od.([]any)[i] {
+	// 				diffTree.isRange = true
+	// 				toAdd = nd
+	// 				break
+	// 			}
+	// 		}
+	// 		diffTree.Dynamics = append(diffTree.Dynamics, toAdd)
+	// 	default:
+	// 		panic(fmt.Sprintf("2unexpected type of Dynamic: %T, want string or *Tree, value is: %v", nd, nd))
+	// 	}
+	// }
+
+	// // TODO: handle statics?
+	// if len(old.Statics) != len(new.Statics) {
+	// 	diffTree.Statics = new.Statics
+	// } else {
+	// 	for i := range new.Statics {
+	// 		if old.Statics[i] != new.Statics[i] {
+	// 			diffTree.Statics = new.Statics
+	// 			break
+	// 		}
+	// 	}
+	// }
+
+	// fmt.Printf("DONE DIFFING: %s\n", diffTree.JSON())
+
+	// return diffTree
+}
+
+// Map returns a map representation of the tree.
+func (t *Tree) Map() map[string]any {
+	m := map[string]any{}
+	err := js.Unmarshal(t.JSON(), &m)
+	if err != nil {
+		panic(err)
+	}
+	return m
 }
 
 // JSON returns a JSON representation of the tree.

@@ -366,8 +366,9 @@ func (s *socket) treeDiff(newTree *tmpl.Tree) []byte {
 	s.oldTree = newTree
 	t := newTree
 	if oldTree != nil {
-		t = tmpl.Diff(oldTree, newTree)
-		fmt.Printf("old: %s\n\n\n new: %s\n\n\n diff: %s\n\n\n", oldTree.JSON(), newTree.JSON(), t.JSON())
+		json := tmpl.DiffJSON(oldTree, newTree)
+		fmt.Printf("old: %s\n\n\n new: %s\n\n\n diff: %s\n\n\n", oldTree.JSON(), newTree.JSON(), json)
+		return json
 	}
 	return t.JSON()
 }
