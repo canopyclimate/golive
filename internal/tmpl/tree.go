@@ -122,37 +122,83 @@ func (t *Tree) Valid() error {
 // Diff returns a new tree that represents the difference between the old and new trees.
 // return value may alias some parts of the input trees
 func Diff(old, new *Tree) *Tree {
+	fmt.Printf("DIFF old: %s new: %s\n", old.JSON(), new.JSON())
 	diffTree := NewTree()
 	diffTree.ExcludeStatics = true
 	diffTree.isRange = new.isRange
-	if len(old.Dynamics) != len(new.Dynamics) {
-		diffTree.Dynamics = new.Dynamics
-		return diffTree
-	}
-	for i, d := range new.Dynamics {
-		switch d := d.(type) {
-		case nil:
-			panic(fmt.Sprintf("cannot use diffTree in diff comparison old: %q, new: %q", old.JSON(), new.JSON()))
+	// if len(old.Dynamics) != len(new.Dynamics) {
+	// 	fmt.Printf("len(old.Dynamics) != len(new.Dynamics): %d != %d\n", len(old.Dynamics), len(new.Dynamics))
+	// 	// diffTree.Dynamics = new.Dynamics
+	// 	diffTree.Dynamics = make([]any, len(old.Dynamics))
+	// 	// for i := range diffTree.Dynamics {
+	// 	// 	diffTree.Dynamics[i] = NewTree()
+	// 	// }
+	// 	fmt.Printf("new.Dynamics: %v\n", diffTree.Dynamics)
+	// 	// {}
+	// 	// {nil}
+	// 	fmt.Printf("early return: %s\n", diffTree.JSON())
+	// 	return diffTree
+	// }
+	for i := 0; i < max(len(old.Dynamics), len(new.Dynamics)); i++ {
+		// Grab old and new dynamics, if available.
+		var od, nd any
+		if i < len(old.Dynamics) {
+			od = old.Dynamics[i]
+		}
+		if i < len(new.Dynamics) {
+			nd = new.Dynamics[i]
+		}
+
+		// Have more new dynamics than old dynamics. Add them.
+		if i >= len(old.Dynamics) {
+			diffTree.Dynamics = append(diffTree.Dynamics, nd)
+			continue
+		}
+
+		// Have more old dynamics than new dynamics.
+		// Add appropriately typed zero value.
+		if i >= len(new.Dynamics) {
+			switch od.(type) {
+			case string:
+				diffTree.Dynamics = append(diffTree.Dynamics, "")
+			case *Tree:
+				diffTree.Dynamics = append(diffTree.Dynamics, NewTree())
+			default:
+				panic(fmt.Sprintf("unexpected type of Dynamic: %T, want string or *Tree, value is: %v", od, od))
+			}
+			continue
+		}
+
+		// Have both old and new dynamics.
+		if reflect.TypeOf(od) != reflect.TypeOf(nd) {
+			panic(fmt.Sprintf("type mismatch: %T != %T", od, nd))
+		}
+
+		switch nd := nd.(type) {
 		case string:
-			if old.Dynamics[i] == new.Dynamics[i] {
-				diffTree.Dynamics = append(diffTree.Dynamics, nil)
+			if od == nd {
+				diffTree.Dynamics = append(diffTree.Dynamics, nil) // sentinal "unchanged" value
 				continue
 			}
-			diffTree.Dynamics = append(diffTree.Dynamics, d)
+			diffTree.Dynamics = append(diffTree.Dynamics, nd)
 		case *Tree:
-			subTree := Diff(old.Dynamics[i].(*Tree), new.Dynamics[i].(*Tree))
-			fmt.Println("subTree: ", old.Dynamics[i].(*Tree), new.Dynamics[i].(*Tree), subTree)
-			var toAdd any // nil by default so if we don't find anything in subtree we still add nil marker
+			subTree := Diff(od.(*Tree), nd)
+			fmt.Printf("subTree: %s -> %s: %s\n", od.(*Tree).JSON(), nd.JSON(), subTree.JSON())
+			var toAdd any // nil (=sentinel "unchanged") by default
 			for _, sd := range subTree.Dynamics {
-				// if we find a non-nil element we want to add the subTree
+				// if we find a changed (=not nil) element we want to add the whole diffed subTree
 				if sd != nil {
 					toAdd = subTree
 					break
 				}
 			}
 			diffTree.Dynamics = append(diffTree.Dynamics, toAdd)
+			fmt.Printf("NEW diffTree: %s\n", diffTree.JSON())
+		default:
+			panic(fmt.Sprintf("unexpected type of Dynamic: %T, want string or *Tree, value is: %v", nd, nd))
 		}
 	}
+	fmt.Printf("DONE DIFFING: %s\n", diffTree.JSON())
 	// TODO: handle statics?
 	return diffTree
 }
@@ -251,6 +297,8 @@ func (cw *countWriter) writeDynamic(d any) {
 	case *Tree:
 		// TODO - we want to include statics and diff them out elsewhere
 		d.writeTo(cw)
+	// case nil:
+	// 	cw.writeString(`""`)
 	default:
 		panic(fmt.Sprintf("unexpected type of Dynamic: %T, want string or *Tree, value is: %v", d, d))
 	}
@@ -283,6 +331,7 @@ func (t *Tree) writeTo(cw *countWriter) {
 		for i, d := range t.Dynamics {
 			switch d.(type) {
 			case nil:
+				// 0: ""
 				fmt.Println("d: ", reflect.TypeOf(d))
 				continue // skip nil dynamics
 			}

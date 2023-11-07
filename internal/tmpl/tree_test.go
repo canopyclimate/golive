@@ -99,55 +99,54 @@ func TestEmptyDynamic(t *testing.T) {
 }
 
 func TestBasicDiff(t *testing.T) {
-	// {
-	// 	const tm = "{{ if .X }}{{.X}}{{ end }}"
-	// 	x, err := htmltmpl.New("test_tmpl").Parse(tm)
-	// 	if err != nil {
-	// 		t.Fatal(err)
-	// 	}
-	// 	oldTree, err := x.ExecuteTree(map[string]any{"X": "A"})
-	// 	if err != nil {
-	// 		t.Fatal(err)
-	// 	}
+	t.Run("change_one_deep", func(t *testing.T) {
+		const tm = "{{ if .X }}{{.X}}{{ end }}"
+		x, err := htmltmpl.New("test_tmpl").Parse(tm)
+		if err != nil {
+			t.Fatal(err)
+		}
+		oldTree, err := x.ExecuteTree(map[string]any{"X": "A"})
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	// 	newTree, err := x.ExecuteTree(map[string]any{"X": "B"})
-	// 	if err != nil {
-	// 		t.Fatal(err)
-	// 	}
+		newTree, err := x.ExecuteTree(map[string]any{"X": "B"})
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	// 	diff := tmpl.Diff(oldTree, newTree)
-	// 	want := `{"0":{"0":"B"}}`
-	// 	dj := diff.JSON()
-	// 	if want != string(dj) {
-	// 		t.Fatalf("got %q want %q", dj, want)
-	// 	}
+		diff := tmpl.Diff(oldTree, newTree)
+		want := `{"0":{"0":"B"}}`
+		dj := diff.JSON()
+		if want != string(dj) {
+			t.Fatalf("got %q want %q", dj, want)
+		}
+	})
 
-	// }
+	t.Run("change_two_deep", func(t *testing.T) {
+		const tm = "{{ if .X }}{{.X}}{{ end }}{{ if .Y }}{{.Y}}{{ end }}"
+		x, err := htmltmpl.New("test_tmpl").Parse(tm)
+		if err != nil {
+			t.Fatal(err)
+		}
+		oldTree, err := x.ExecuteTree(map[string]any{"X": "A", "Y": "B"})
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	// {
-	// 	const tm = "{{ if .X }}{{.X}}{{ end }}{{ if .Y }}{{.Y}}{{ end }}"
-	// 	x, err := htmltmpl.New("test_tmpl").Parse(tm)
-	// 	if err != nil {
-	// 		t.Fatal(err)
-	// 	}
-	// 	oldTree, err := x.ExecuteTree(map[string]any{"X": "A", "Y": "B"})
-	// 	if err != nil {
-	// 		t.Fatal(err)
-	// 	}
+		newTree, err := x.ExecuteTree(map[string]any{"X": "A", "Y": "C"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		diff := tmpl.Diff(oldTree, newTree)
+		want := `{"1":{"0":"C"}}`
+		dj := diff.JSON()
+		if want != string(dj) {
+			t.Fatalf("got %q want %q", dj, want)
+		}
+	})
 
-	// 	newTree, err := x.ExecuteTree(map[string]any{"X": "A", "Y": "C"})
-	// 	if err != nil {
-	// 		t.Fatal(err)
-	// 	}
-	// 	diff := tmpl.Diff(oldTree, newTree)
-	// 	want := `{"1":{"0":"C"}}`
-	// 	dj := diff.JSON()
-	// 	if want != string(dj) {
-	// 		t.Fatalf("got %q want %q", dj, want)
-	// 	}
-	// }
-
-	{
+	t.Run("one_to_zero", func(t *testing.T) {
 		const tm = "{{if .Z}}{{.Z}}{{end}}"
 		x, err := htmltmpl.New("test_tmpl").Parse(tm)
 		if err != nil {
@@ -165,13 +164,13 @@ func TestBasicDiff(t *testing.T) {
 		fmt.Printf("oldTree: %s\n", oldTree.JSON())
 		fmt.Printf("newTree: %s\n", newTree.JSON())
 		diff := tmpl.Diff(oldTree, newTree)
-		want := `{"0":""}`
+		// want := `{"0":""}`
+		want := `{"0":{"0":""}}`
 		dj := diff.JSON()
 		if want != string(dj) {
 			t.Fatalf("got %q want %q", dj, want)
 		}
-	}
-
+	})
 }
 
 func TestVariableDynamic(t *testing.T) {
