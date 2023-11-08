@@ -358,19 +358,26 @@ type socket struct {
 	activeUploadRef   string
 	activeUploadTopic string
 	errTokenBucket    *rate.Limiter
-	oldTree           *tmpl.Tree
+	// oldTree           *tmpl.Tree
+	oldTreeMap map[string]any
 }
 
 func (s *socket) treeDiff(newTree *tmpl.Tree) []byte {
-	oldTree := s.oldTree
-	s.oldTree = newTree
-	t := newTree
-	if oldTree != nil {
-		json := tmpl.DiffJSON(oldTree, newTree)
-		fmt.Printf("old: %s\n\n\n new: %s\n\n\n diff: %s\n\n\n", oldTree.JSON(), newTree.JSON(), json)
-		return json
+	// oldTree := s.oldTree
+	oldTreeMap := s.oldTreeMap
+	// s.oldTree = newTree
+	m := newTree.Map()
+	s.oldTreeMap = m
+	if oldTreeMap != nil { // oldTree != nil {
+		// json := tmpl.Diff(oldTree, newTree)
+		// return json
+		m = tmpl.DiffMap(oldTreeMap, s.oldTreeMap)
 	}
-	return t.JSON()
+	json, err := json.Marshal(m)
+	if err != nil {
+		panic(err)
+	}
+	return json
 }
 
 func (s *socket) dispatch(ctx context.Context, msg *phx.Msg) ([]byte, error) {
